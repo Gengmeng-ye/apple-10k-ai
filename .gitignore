@@ -1,0 +1,31 @@
+# Secret environment variables
+.env
+
+# Python temporary files
+__pycache__/
+*.py[cod]
+
+# Testing and tool cache
+.pytest_cache/
+.streamlit/
+
+# macOS files
+.DS_Store
+
+# Local database and generated data
+warehouse/*.duckdb
+data/filings/*
+data/raw/*
+data/processed/*
+models/*
+outputs/*
+logs/*
+
+# Keep empty folders in Git later
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!warehouse/.gitkeep
+!models/.gitkeep
+!outputs/.gitkeep
+!logs/.gitkeep
+!data/filings/.gitkeep

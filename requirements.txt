@@ -1,0 +1,13 @@
+streamlit
+pandas
+plotly
+python-dotenv
+openai
+requests
+duckdb
+pyarrow
+beautifulsoup4
+lxml
+scikit-learn
+joblib
+pytest
