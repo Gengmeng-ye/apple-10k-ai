@@ -16,6 +16,7 @@ FINANCIAL_CONCEPTS = {
     "revenue_billions": ("RevenueFromContractWithCustomerExcludingAssessedTax"),
     "operating_income_billions": "OperatingIncomeLoss",
     "net_income_billions": "NetIncomeLoss",
+    "operating_cash_flow_billions": ("NetCashProvidedByUsedInOperatingActivities"),
 }
 
 
