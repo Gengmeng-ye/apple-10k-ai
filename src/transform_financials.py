@@ -107,6 +107,7 @@ def main():
 
     print("\nApple financial summary:")
     print(financial_summary.tail(5).round(2).to_string(index=False))
+    print(f"\nTotal rows: {len(financial_summary)}")
 
     save_to_duckdb(financial_summary)
 
