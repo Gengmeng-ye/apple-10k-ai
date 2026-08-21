@@ -3,8 +3,10 @@
 import json
 from pathlib import Path
 import pandas as pd
+import duckdb
 
 RAW_DATA_FILE = Path("data/raw/apple_companyfacts.json")
+DATABASE_FILE = Path("warehouse/apple_finance.duckdb")
 
 REVENUE_CONCEPT = ( "RevenueFromContractWithCustomerExcludingAssessedTax")
 OPERATING_INCOME_CONCEPT = "OperatingIncomeLoss"
@@ -59,6 +61,19 @@ def extract_annual_operating_income(
 
     return operating_income[["end", "operating_income_billions"]]
 
+def save_to_duckdb(financial_summary: pd.DataFrame) -> None:
+    """Save the financial summary to DuckDB."""
+
+    connection = duckdb.connect(str(DATABASE_FILE))
+    connection.execute(
+        """
+        CREATE OR REPLACE TABLE apple_financial_summary AS
+        SELECT * FROM financial_summary
+        """)
+    connection.close()
+    print(f"\nSaved to DuckDB: {DATABASE_FILE}")
+
+
 def main():
     """Run the financial transformation pipeline."""
     company_facts = load_company_facts()
@@ -69,9 +84,9 @@ def main():
     financial_summary["operating_margin_pct"] = (financial_summary["operating_income_billions"]/ financial_summary["revenue_billions"]* 100)
 
     print("\nApple financial summary:")
-    print(financial_summary[
-        ["end", "revenue_billions", "operating_income_billions", "operating_margin_pct"]].tail(5).round(2).to_string(index=False))
-
+    print(financial_summary[["end", "revenue_billions", "operating_income_billions", "operating_margin_pct"]].tail(5).round(2).to_string(index=False))
+    
+    save_to_duckdb(financial_summary)
 
 if __name__ == "__main__":
     main()
