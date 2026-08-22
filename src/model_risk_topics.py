@@ -16,6 +16,15 @@ CHUNKS_FILE = Path("data/processed/apple_risk_chunks.json")
 NUMBER_OF_TOPICS = 6
 WORDS_PER_TOPIC = 8
 
+TOPIC_LABELS = {
+    1: "Cybersecurity and Data Privacy",
+    2: "Products and Competition",
+    3: "Foreign Exchange",
+    4: "Credit and Financial Risk",
+    5: "Legal and Regulatory",
+    6: "Trade and Supply Chain",
+}
+
 
 def load_risk_factors() -> str:
     """Load the extracted Risk Factors text."""
@@ -44,15 +53,27 @@ def split_into_chunks(text: str, max_characters: int = 1500,) -> list[str]:
     return chunks
 
 
-def save_chunks(chunks: list[str]) -> None:
-    """Save numbered Risk Factors chunks as JSON."""
-    records = [
-        {
-            "chunk_id": index,
+def save_chunks(chunks: list[str],chunk_topic_matrix,) -> None:
+    """Save chunks with their strongest topics."""
+    records = []
+
+    for chunk_index, chunk in enumerate(chunks):
+        topic_scores = chunk_topic_matrix[chunk_index]
+
+        topic_index = int(topic_scores.argmax())
+        topic_number = topic_index + 1
+
+        topic_score = topic_scores[topic_index]
+
+        record = {
+            "chunk_id": chunk_index + 1,
+            "topic_id": topic_number,
+            "topic_label": TOPIC_LABELS[topic_number],
+            "topic_score": round(float(topic_score),4,),
             "text": chunk,
         }
-        for index, chunk in enumerate(chunks, start=1,)
-    ]
+
+        records.append(record)
 
     CHUNKS_FILE.write_text(
         json.dumps(
@@ -153,9 +174,10 @@ def main() -> None:
     text = load_risk_factors()
     chunks = split_into_chunks(text)
 
-    save_chunks(chunks)
 
     model, vectorizer, chunk_topic_matrix = (build_topic_model(chunks))
+    save_chunks(chunks,chunk_topic_matrix,)
+
     print("\nDiscovered risk topics:")
 
     print_topic_keywords(model, vectorizer,)
