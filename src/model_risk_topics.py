@@ -127,6 +127,27 @@ def print_topic_keywords( model: NMF, vectorizer: TfidfVectorizer,) -> None:
             f"{', '.join(keywords)}"
         )
 
+
+def print_representative_chunks(chunks: list[str], chunk_topic_matrix,) -> None:
+    """Print the strongest chunk for each topic."""
+    print("\nRepresentative chunks:")
+
+    for topic_index in range(NUMBER_OF_TOPICS):
+        topic_scores = chunk_topic_matrix[:,topic_index,]
+
+        best_chunk_index = (topic_scores.argmax())
+
+        best_score = topic_scores[best_chunk_index]
+
+        print(
+            f"\nTopic {topic_index + 1} "
+            f"| Chunk {best_chunk_index + 1} "
+            f"| Score: {best_score:.3f}"
+        )
+
+        print(chunks[best_chunk_index][:500])
+
+
 def main() -> None:
     """Load, split, and save Apple's Risk Factors text."""
     text = load_risk_factors()
@@ -134,9 +155,11 @@ def main() -> None:
 
     save_chunks(chunks)
 
-    model, vectorizer, _ = build_topic_model(chunks)
+    model, vectorizer, chunk_topic_matrix = (build_topic_model(chunks))
     print("\nDiscovered risk topics:")
+
     print_topic_keywords(model, vectorizer,)
+    print_representative_chunks(chunks, chunk_topic_matrix,)
 
 
     print(f"Total characters: {len(text):,}")
