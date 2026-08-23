@@ -2,27 +2,54 @@
 
 import json
 import re
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 import duckdb
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from contextlib import redirect_stdout
-from io import StringIO
-
 
 DATABASE_FILE = Path("warehouse/apple_finance.duckdb")
 CHUNKS_FILE = Path("data/processed/apple_risk_chunks.json")
 
 FINANCIAL_METRICS = {
-    "operating cash flow": ("operating_cash_flow_billions", "Operating Cash Flow", "$B"),
-    "operating margin": ("operating_margin_pct", "Operating Margin", "%"),
-    "net profit margin": ("net_profit_margin_pct", "Net Profit Margin", "%"),
-    "net margin": ("net_profit_margin_pct", "Net Profit Margin", "%"),
-    "operating income": ("operating_income_billions", "Operating Income", "$B"),
-    "net income": ("net_income_billions", "Net Income", "$B"),
-    "revenue": ("revenue_billions", "Revenue", "$B"),
+    "operating cash flow": (
+        "operating_cash_flow_billions",
+        "Operating Cash Flow",
+        "$B",
+    ),
+    "operating margin": (
+        "operating_margin_pct",
+        "Operating Margin",
+        "%",
+    ),
+    "net profit margin": (
+        "net_profit_margin_pct",
+        "Net Profit Margin",
+        "%",
+    ),
+    "net margin": (
+        "net_profit_margin_pct",
+        "Net Profit Margin",
+        "%",
+    ),
+    "operating income": (
+        "operating_income_billions",
+        "Operating Income",
+        "$B",
+    ),
+    "net income": (
+        "net_income_billions",
+        "Net Income",
+        "$B",
+    ),
+    "revenue": (
+        "revenue_billions",
+        "Revenue",
+        "$B",
+    ),
 }
 
 RISK_KEYWORDS = [
@@ -47,11 +74,11 @@ RISK_KEYWORDS = [
 def find_financial_metrics(question: str) -> list[tuple]:
     """Find all financial metrics mentioned in the question."""
 
-    question = question.lower()
+    question_lower = question.lower()
     matches = []
 
     for keyword, metric in FINANCIAL_METRICS.items():
-        position = question.find(keyword)
+        position = question_lower.find(keyword)
 
         if position != -1:
             matches.append((position, metric))
@@ -61,7 +88,7 @@ def find_financial_metrics(question: str) -> list[tuple]:
     metrics = []
     used_columns = set()
 
-    for position, metric in matches:
+    for _, metric in matches:
         column = metric[0]
 
         if column not in used_columns:
@@ -79,10 +106,10 @@ def find_financial_metric(question: str):
 
 
 def find_years(question: str) -> list[int]:
-    """Find all four-digit years in the question."""
+    """Find unique four-digit fiscal years in the question."""
 
     years = re.findall(r"\b20\d{2}\b", question)
-    return [int(year) for year in years]
+    return list(dict.fromkeys(int(year) for year in years))
 
 
 def classify_question(question: str) -> str:
@@ -110,51 +137,62 @@ def query_financial_data(question: str) -> None:
         print("Please specify a supported financial metric.")
         return
 
-    trend_words = [
-        "trend",
-        "last five years",
-        "past five years",
-        "over five years",
-    ]
+    number_words = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+    }
 
-    show_trend = any(
-        word in question_lower
-        for word in trend_words
+    trend_match = re.search(
+        r"(?:last|past|over the last|over)\s+"
+        r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten)"
+        r"\s+(?:fiscal\s+)?years?",
+        question_lower,
     )
 
-    columns = ", ".join(
-        metric[0]
-        for metric in metrics
-    )
+    if trend_match:
+        year_count_text = trend_match.group(1)
+
+        if year_count_text.isdigit():
+            trend_year_count = int(year_count_text)
+        else:
+            trend_year_count = number_words[year_count_text]
+
+    elif "trend" in question_lower:
+        trend_year_count = 5
+
+    else:
+        trend_year_count = None
+
+    show_trend = trend_year_count is not None
+    columns = ", ".join(metric[0] for metric in metrics)
 
     connection = duckdb.connect(
         str(DATABASE_FILE),
         read_only=True,
     )
 
-    # Explicit fiscal years
     if years:
-        placeholders = ", ".join(
-            "?"
-            for _ in years
-        )
+        placeholders = ", ".join("?" for _ in years)
 
         query = f"""
             SELECT
                 YEAR(CAST("end" AS DATE)) AS fiscal_year,
                 {columns}
             FROM apple_financial_summary
-            WHERE YEAR(CAST("end" AS DATE))
-                IN ({placeholders})
+            WHERE YEAR(CAST("end" AS DATE)) IN ({placeholders})
             ORDER BY fiscal_year
         """
 
-        rows = connection.execute(
-            query,
-            years,
-        ).fetchall()
+        rows = connection.execute(query, years).fetchall()
 
-    # Latest five-year trend
     elif show_trend:
         query = f"""
             SELECT
@@ -162,16 +200,12 @@ def query_financial_data(question: str) -> None:
                 {columns}
             FROM apple_financial_summary
             ORDER BY CAST("end" AS DATE) DESC
-            LIMIT 5
+            LIMIT {trend_year_count}
         """
 
-        rows = connection.execute(
-            query
-        ).fetchall()
-
+        rows = connection.execute(query).fetchall()
         rows.reverse()
 
-    # Latest available fiscal year
     else:
         query = f"""
             SELECT
@@ -182,9 +216,7 @@ def query_financial_data(question: str) -> None:
             LIMIT 1
         """
 
-        rows = connection.execute(
-            query
-        ).fetchall()
+        rows = connection.execute(query).fetchall()
 
     connection.close()
 
@@ -192,153 +224,63 @@ def query_financial_data(question: str) -> None:
         print("No matching financial data was found.")
         return
 
-    # Report requested years that are unavailable
     if years:
-        returned_years = {
-            int(row[0])
-            for row in rows
-        }
-
-        missing_years = [
-            year
-            for year in years
-            if year not in returned_years
-        ]
+        returned_years = {int(row[0]) for row in rows}
+        missing_years = [year for year in years if year not in returned_years]
 
         if missing_years:
-            missing_text = ", ".join(
-                f"FY{year}"
-                for year in missing_years
-            )
+            missing_text = ", ".join(f"FY{year}" for year in missing_years)
+            print(f"No financial data was found for: {missing_text}\n")
 
-            print(
-                f"No financial data was found for: "
-                f"{missing_text}\n"
-            )
-
-    # Display one metric for one year
     if len(rows) == 1 and len(metrics) == 1:
         fiscal_year = int(rows[0][0])
         value = rows[0][1]
         _, label, unit = metrics[0]
+        formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
+        print(f"{label} in FY{fiscal_year}: {formatted_value}")
 
-        if unit == "%":
-            formatted_value = f"{value:.2f}%"
-        else:
-            formatted_value = f"${value:.2f}B"
-
-        print(
-            f"{label} in FY{fiscal_year}: "
-            f"{formatted_value}"
-        )
-
-    # Display all year × metric combinations
     else:
         print("Financial metrics by fiscal year:")
 
         for row in rows:
             fiscal_year = int(row[0])
             values = row[1:]
-
             print(f"\nFY{fiscal_year}")
 
-            for metric, value in zip(
-                metrics,
-                values,
-            ):
+            for metric, value in zip(metrics, values):
                 _, label, unit = metric
+                formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
+                print(f"{label}: {formatted_value}")
 
-                if unit == "%":
-                    formatted_value = f"{value:.2f}%"
-                else:
-                    formatted_value = f"${value:.2f}B"
-
-                print(
-                    f"{label}: "
-                    f"{formatted_value}"
-                )
-
-    # Calculate changes from the first year to the last year
     if len(rows) > 1:
         first_row = rows[0]
         last_row = rows[-1]
-
         first_year = int(first_row[0])
         last_year = int(last_row[0])
 
-        print(
-            f"\nOverall change from "
-            f"FY{first_year} to FY{last_year}:"
-        )
+        print(f"\nOverall change from FY{first_year} to FY{last_year}:")
 
-        for metric_index, metric in enumerate(
-            metrics,
-            start=1,
-        ):
+        for metric_index, metric in enumerate(metrics, start=1):
             _, label, unit = metric
-
             first_value = first_row[metric_index]
             last_value = last_row[metric_index]
             value_change = last_value - first_value
 
             if unit == "%":
-                print(
-                    f"{label}: "
-                    f"{value_change:+.2f} "
-                    f"percentage points"
-                )
-
+                print(f"{label}: {value_change:+.2f} percentage points")
             else:
-                sign = (
-                    "+"
-                    if value_change >= 0
-                    else "-"
-                )
+                sign = "+" if value_change >= 0 else "-"
+                growth = (value_change / first_value) * 100
+                print(f"{label}: {sign}${abs(value_change):.2f}B")
+                print(f"{label} growth: {growth:+.2f}%")
 
-                growth = (
-                    value_change
-                    / first_value
-                    * 100
-                )
-
-                print(
-                    f"{label}: "
-                    f"{sign}${abs(value_change):.2f}B"
-                )
-
-                print(
-                    f"{label} growth: "
-                    f"{growth:+.2f}%"
-                )
-
-    # Preserve highest/lowest output for trend questions
     if show_trend and len(metrics) == 1:
-        _, label, _ = metrics[0]
+        highest_row = max(rows, key=lambda row: row[1])
+        lowest_row = min(rows, key=lambda row: row[1])
+        print(f"Highest year: FY{int(highest_row[0])}")
+        print(f"Lowest year: FY{int(lowest_row[0])}")
 
-        highest_row = max(
-            rows,
-            key=lambda row: row[1],
-        )
-
-        lowest_row = min(
-            rows,
-            key=lambda row: row[1],
-        )
-
-        print(
-            f"Highest year: "
-            f"FY{int(highest_row[0])}"
-        )
-
-        print(
-            f"Lowest year: "
-            f"FY{int(lowest_row[0])}"
-        )
-
-    print(
-        "\nSource: "
-        "SEC Company Facts API via DuckDB"
-    )
+    print("\nSource: SEC Company Facts API via DuckDB")
 
 
 def load_risk_chunks() -> list[dict]:
@@ -348,16 +290,22 @@ def load_risk_chunks() -> list[dict]:
         return json.load(file)
 
 
-def retrieve_risk_evidence(question: str, top_k: int = 3) -> list[dict]:
+def retrieve_risk_evidence(
+    question: str,
+    top_k: int = 3,
+) -> list[dict]:
     """Return the most relevant Risk Factors chunks."""
 
     chunks = load_risk_chunks()
     texts = [chunk["text"] for chunk in chunks]
 
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+    vectorizer = TfidfVectorizer(
+        stop_words="english",
+        ngram_range=(1, 2),
+    )
+
     chunk_matrix = vectorizer.fit_transform(texts)
     question_vector = vectorizer.transform([question])
-
     scores = cosine_similarity(question_vector, chunk_matrix).flatten()
     ranked_indexes = scores.argsort()[::-1][:top_k]
 
@@ -375,6 +323,10 @@ def print_risk_evidence(question: str) -> None:
     """Print the most relevant Risk Factors evidence."""
 
     evidence = retrieve_risk_evidence(question)
+
+    if not evidence or evidence[0]["retrieval_score"] == 0:
+        print("No relevant Risk Factors evidence was found.")
+        return
 
     print("Retrieved Risk Factors evidence:")
 
@@ -406,6 +358,7 @@ def answer_question(question: str) -> None:
             "and 10-K risk analysis."
         )
 
+
 def get_answer(question: str) -> str:
     """Return the local financial or risk answer as text."""
 
@@ -418,14 +371,15 @@ def get_answer(question: str) -> str:
 
 
 def main() -> None:
-    """Test the three question routes."""
+    """Test financial, risk, and unsupported questions."""
 
     questions = [
         "What was Apple's revenue in 2025?",
-        "Compare Apple's revenue between 2024 and 2025.",
-        "Compare Apple's operating margin between 2024 and 2025.",
-        "What were Apple's revenue, operating income, and net income in 2025?",
-        "Show Apple's revenue trend over the last five years.",
+        "Compare Apple's revenue in 2023, 2024, and 2025.",
+        "Compare Apple's revenue and operating margin in 2023, 2024, and 2025.",
+        "Show Apple's revenue over the past 2 years.",
+        "Show Apple's revenue trend over the past three years.",
+        "Show Apple's revenue trend.",
         "What supply chain risks does Apple disclose?",
         "What is the weather in Los Angeles?",
     ]
