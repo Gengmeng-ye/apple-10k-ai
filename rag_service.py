@@ -156,6 +156,55 @@ def query_financial_data(question: str) -> None:
     # One metric
     column, label, unit = metrics[0]
 
+
+    # Show the latest five-year trend
+    trend_words = ["trend", "last five years", "past five years", "over five years"]
+
+    if any(word in question.lower() for word in trend_words):
+        query = f"""
+            SELECT YEAR(CAST("end" AS DATE)), {column}
+            FROM apple_financial_summary
+            ORDER BY CAST("end" AS DATE) DESC
+            LIMIT 5
+        """
+
+        rows = connection.execute(query).fetchall()
+        connection.close()
+        rows.reverse()
+
+        if not rows:
+            print("No financial trend data was found.")
+            return
+
+        print(f"{label} trend:\n")
+
+        for fiscal_year, value in rows:
+            formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
+            print(f"FY{int(fiscal_year)}: {formatted_value}")
+
+        first_year, first_value = rows[0]
+        last_year, last_value = rows[-1]
+        value_change = last_value - first_value
+
+        highest_year, highest_value = max(rows, key=lambda row: row[1])
+        lowest_year, lowest_value = min(rows, key=lambda row: row[1])
+
+        print()
+
+        if unit == "%":
+            print(f"Overall change: {value_change:+.2f} percentage points")
+        else:
+            sign = "+" if value_change >= 0 else "-"
+            growth = (value_change / first_value) * 100
+            print(f"Overall change: {sign}${abs(value_change):.2f}B")
+            print(f"Overall growth: {growth:+.2f}%")
+
+        print(f"Highest year: FY{int(highest_year)}")
+        print(f"Lowest year: FY{int(lowest_year)}")
+        print("Source: SEC Company Facts API via DuckDB")
+        return
+
+
     # Compare two fiscal years
     if len(years) >= 2:
         selected_years = years[:2]
@@ -299,6 +348,7 @@ def main() -> None:
         "Compare Apple's revenue between 2024 and 2025.",
         "Compare Apple's operating margin between 2024 and 2025.",
         "What were Apple's revenue, operating income, and net income in 2025?",
+        "Show Apple's revenue trend over the last five years.",
         "What supply chain risks does Apple disclose?",
         "What is the weather in Los Angeles?",
     ]
