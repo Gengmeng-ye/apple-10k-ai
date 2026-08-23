@@ -41,16 +41,38 @@ RISK_KEYWORDS = [
 ]
 
 
-def find_financial_metric(question: str):
-    """Find the financial metric mentioned in the question."""
+def find_financial_metrics(question: str) -> list[tuple]:
+    """Find all financial metrics mentioned in the question."""
 
     question = question.lower()
+    matches = []
 
     for keyword, metric in FINANCIAL_METRICS.items():
-        if keyword in question:
-            return metric
+        position = question.find(keyword)
 
-    return None
+        if position != -1:
+            matches.append((position, metric))
+
+    matches.sort(key=lambda item: item[0])
+
+    metrics = []
+    used_columns = set()
+
+    for position, metric in matches:
+        column = metric[0]
+
+        if column not in used_columns:
+            metrics.append(metric)
+            used_columns.add(column)
+
+    return metrics
+
+
+def find_financial_metric(question: str):
+    """Find the first financial metric mentioned in the question."""
+
+    metrics = find_financial_metrics(question)
+    return metrics[0] if metrics else None
 
 
 def find_years(question: str) -> list[int]:
@@ -68,43 +90,84 @@ def classify_question(question: str) -> str:
     if any(keyword in question_lower for keyword in RISK_KEYWORDS):
         return "risk"
 
-    if find_financial_metric(question):
+    if find_financial_metrics(question):
         return "financial"
 
     return "unsupported"
 
 
 def query_financial_data(question: str) -> None:
-    """Query or compare a financial metric from DuckDB."""
+    """Query or compare financial metrics from DuckDB."""
 
-    metric = find_financial_metric(question)
+    metrics = find_financial_metrics(question)
+    years = find_years(question)
 
-    if metric is None:
+    if not metrics:
         print("Please specify a supported financial metric.")
         return
 
-    column, label, unit = metric
-    years = find_years(question)
-
     connection = duckdb.connect(str(DATABASE_FILE), read_only=True)
 
+    # Multiple metrics for one fiscal year
+    if len(metrics) > 1:
+        if len(years) > 1:
+            connection.close()
+            print("Multiple-year, multiple-metric comparison is not supported yet.")
+            return
+
+        columns = ", ".join(metric[0] for metric in metrics)
+
+        if years:
+            query = f"""
+                SELECT YEAR(CAST("end" AS DATE)), {columns}
+                FROM apple_financial_summary
+                WHERE YEAR(CAST("end" AS DATE)) = ?
+            """
+            result = connection.execute(query, [years[0]]).fetchone()
+        else:
+            query = f"""
+                SELECT YEAR(CAST("end" AS DATE)), {columns}
+                FROM apple_financial_summary
+                ORDER BY CAST("end" AS DATE) DESC
+                LIMIT 1
+            """
+            result = connection.execute(query).fetchone()
+
+        connection.close()
+
+        if result is None:
+            requested_year = years[0] if years else "the latest year"
+            print(f"No financial data was found for {requested_year}.")
+            return
+
+        fiscal_year = int(result[0])
+        values = result[1:]
+
+        print(f"Financial metrics for FY{fiscal_year}:\n")
+
+        for metric, value in zip(metrics, values):
+            column, label, unit = metric
+            formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
+            print(f"{label}: {formatted_value}")
+
+        print("\nSource: SEC Company Facts API via DuckDB")
+        return
+
+    # One metric
+    column, label, unit = metrics[0]
+
+    # Compare two fiscal years
     if len(years) >= 2:
         selected_years = years[:2]
 
         query = f"""
-            SELECT
-                YEAR(CAST("end" AS DATE)) AS fiscal_year,
-                {column}
+            SELECT YEAR(CAST("end" AS DATE)), {column}
             FROM apple_financial_summary
             WHERE YEAR(CAST("end" AS DATE)) IN (?, ?)
-            ORDER BY fiscal_year
+            ORDER BY YEAR(CAST("end" AS DATE))
         """
 
-        rows = connection.execute(
-            query,
-            selected_years,
-        ).fetchall()
-
+        rows = connection.execute(query, selected_years).fetchall()
         connection.close()
 
         if len(rows) != 2:
@@ -113,48 +176,39 @@ def query_financial_data(question: str) -> None:
 
         first_year, first_value = rows[0]
         second_year, second_value = rows[1]
-        
+
         value_change = second_value - first_value
         percentage_change = (value_change / first_value) * 100
-        
+
         if unit == "%":
             print(f"{label} in FY{int(first_year)}: {first_value:.2f}%")
             print(f"{label} in FY{int(second_year)}: {second_value:.2f}%")
             print(f"Change: {value_change:+.2f} percentage points")
-            
         else:
             sign = "+" if value_change >= 0 else "-"
             print(f"{label} in FY{int(first_year)}: ${first_value:.2f}B")
             print(f"{label} in FY{int(second_year)}: ${second_value:.2f}B")
             print(f"Change: {sign}${abs(value_change):.2f}B")
             print(f"Growth: {percentage_change:+.2f}%")
-        
+
         print("Source: SEC Company Facts API via DuckDB")
         return
 
-    if len(years) == 1:
+    # One metric for one year, or the latest year
+    if years:
         query = f"""
-            SELECT
-                YEAR(CAST("end" AS DATE)) AS fiscal_year,
-                {column}
+            SELECT YEAR(CAST("end" AS DATE)), {column}
             FROM apple_financial_summary
             WHERE YEAR(CAST("end" AS DATE)) = ?
         """
-
-        result = connection.execute(
-            query,
-            [years[0]],
-        ).fetchone()
+        result = connection.execute(query, [years[0]]).fetchone()
     else:
         query = f"""
-            SELECT
-                YEAR(CAST("end" AS DATE)) AS fiscal_year,
-                {column}
+            SELECT YEAR(CAST("end" AS DATE)), {column}
             FROM apple_financial_summary
             ORDER BY CAST("end" AS DATE) DESC
             LIMIT 1
         """
-
         result = connection.execute(query).fetchone()
 
     connection.close()
@@ -165,11 +219,7 @@ def query_financial_data(question: str) -> None:
         return
 
     fiscal_year, value = result
-
-    if unit == "%":
-        formatted_value = f"{value:.2f}%"
-    else:
-        formatted_value = f"${value:.2f}B"
+    formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
 
     print(f"{label} in FY{int(fiscal_year)}: {formatted_value}")
     print("Source: SEC Company Facts API via DuckDB")
@@ -248,6 +298,7 @@ def main() -> None:
         "What was Apple's revenue in 2025?",
         "Compare Apple's revenue between 2024 and 2025.",
         "Compare Apple's operating margin between 2024 and 2025.",
+        "What were Apple's revenue, operating income, and net income in 2025?",
         "What supply chain risks does Apple disclose?",
         "What is the weather in Los Angeles?",
     ]
