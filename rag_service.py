@@ -8,6 +8,9 @@ import duckdb
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+from contextlib import redirect_stdout
+from io import StringIO
+
 
 DATABASE_FILE = Path("warehouse/apple_finance.duckdb")
 CHUNKS_FILE = Path("data/processed/apple_risk_chunks.json")
@@ -97,181 +100,245 @@ def classify_question(question: str) -> str:
 
 
 def query_financial_data(question: str) -> None:
-    """Query or compare financial metrics from DuckDB."""
+    """Query any combination of financial metrics and fiscal years."""
 
     metrics = find_financial_metrics(question)
     years = find_years(question)
+    question_lower = question.lower()
 
     if not metrics:
         print("Please specify a supported financial metric.")
         return
 
-    connection = duckdb.connect(str(DATABASE_FILE), read_only=True)
+    trend_words = [
+        "trend",
+        "last five years",
+        "past five years",
+        "over five years",
+    ]
 
-    # Multiple metrics for one fiscal year
-    if len(metrics) > 1:
-        if len(years) > 1:
-            connection.close()
-            print("Multiple-year, multiple-metric comparison is not supported yet.")
-            return
+    show_trend = any(
+        word in question_lower
+        for word in trend_words
+    )
 
-        columns = ", ".join(metric[0] for metric in metrics)
+    columns = ", ".join(
+        metric[0]
+        for metric in metrics
+    )
 
-        if years:
-            query = f"""
-                SELECT YEAR(CAST("end" AS DATE)), {columns}
-                FROM apple_financial_summary
-                WHERE YEAR(CAST("end" AS DATE)) = ?
-            """
-            result = connection.execute(query, [years[0]]).fetchone()
-        else:
-            query = f"""
-                SELECT YEAR(CAST("end" AS DATE)), {columns}
-                FROM apple_financial_summary
-                ORDER BY CAST("end" AS DATE) DESC
-                LIMIT 1
-            """
-            result = connection.execute(query).fetchone()
+    connection = duckdb.connect(
+        str(DATABASE_FILE),
+        read_only=True,
+    )
 
-        connection.close()
+    # Explicit fiscal years
+    if years:
+        placeholders = ", ".join(
+            "?"
+            for _ in years
+        )
 
-        if result is None:
-            requested_year = years[0] if years else "the latest year"
-            print(f"No financial data was found for {requested_year}.")
-            return
-
-        fiscal_year = int(result[0])
-        values = result[1:]
-
-        print(f"Financial metrics for FY{fiscal_year}:\n")
-
-        for metric, value in zip(metrics, values):
-            column, label, unit = metric
-            formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
-            print(f"{label}: {formatted_value}")
-
-        print("\nSource: SEC Company Facts API via DuckDB")
-        return
-
-    # One metric
-    column, label, unit = metrics[0]
-
-
-    # Show the latest five-year trend
-    trend_words = ["trend", "last five years", "past five years", "over five years"]
-
-    if any(word in question.lower() for word in trend_words):
         query = f"""
-            SELECT YEAR(CAST("end" AS DATE)), {column}
+            SELECT
+                YEAR(CAST("end" AS DATE)) AS fiscal_year,
+                {columns}
+            FROM apple_financial_summary
+            WHERE YEAR(CAST("end" AS DATE))
+                IN ({placeholders})
+            ORDER BY fiscal_year
+        """
+
+        rows = connection.execute(
+            query,
+            years,
+        ).fetchall()
+
+    # Latest five-year trend
+    elif show_trend:
+        query = f"""
+            SELECT
+                YEAR(CAST("end" AS DATE)) AS fiscal_year,
+                {columns}
             FROM apple_financial_summary
             ORDER BY CAST("end" AS DATE) DESC
             LIMIT 5
         """
 
-        rows = connection.execute(query).fetchall()
-        connection.close()
+        rows = connection.execute(
+            query
+        ).fetchall()
+
         rows.reverse()
 
-        if not rows:
-            print("No financial trend data was found.")
-            return
-
-        print(f"{label} trend:\n")
-
-        for fiscal_year, value in rows:
-            formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
-            print(f"FY{int(fiscal_year)}: {formatted_value}")
-
-        first_year, first_value = rows[0]
-        last_year, last_value = rows[-1]
-        value_change = last_value - first_value
-
-        highest_year, highest_value = max(rows, key=lambda row: row[1])
-        lowest_year, lowest_value = min(rows, key=lambda row: row[1])
-
-        print()
-
-        if unit == "%":
-            print(f"Overall change: {value_change:+.2f} percentage points")
-        else:
-            sign = "+" if value_change >= 0 else "-"
-            growth = (value_change / first_value) * 100
-            print(f"Overall change: {sign}${abs(value_change):.2f}B")
-            print(f"Overall growth: {growth:+.2f}%")
-
-        print(f"Highest year: FY{int(highest_year)}")
-        print(f"Lowest year: FY{int(lowest_year)}")
-        print("Source: SEC Company Facts API via DuckDB")
-        return
-
-
-    # Compare two fiscal years
-    if len(years) >= 2:
-        selected_years = years[:2]
-
-        query = f"""
-            SELECT YEAR(CAST("end" AS DATE)), {column}
-            FROM apple_financial_summary
-            WHERE YEAR(CAST("end" AS DATE)) IN (?, ?)
-            ORDER BY YEAR(CAST("end" AS DATE))
-        """
-
-        rows = connection.execute(query, selected_years).fetchall()
-        connection.close()
-
-        if len(rows) != 2:
-            print("Financial data was not found for both fiscal years.")
-            return
-
-        first_year, first_value = rows[0]
-        second_year, second_value = rows[1]
-
-        value_change = second_value - first_value
-        percentage_change = (value_change / first_value) * 100
-
-        if unit == "%":
-            print(f"{label} in FY{int(first_year)}: {first_value:.2f}%")
-            print(f"{label} in FY{int(second_year)}: {second_value:.2f}%")
-            print(f"Change: {value_change:+.2f} percentage points")
-        else:
-            sign = "+" if value_change >= 0 else "-"
-            print(f"{label} in FY{int(first_year)}: ${first_value:.2f}B")
-            print(f"{label} in FY{int(second_year)}: ${second_value:.2f}B")
-            print(f"Change: {sign}${abs(value_change):.2f}B")
-            print(f"Growth: {percentage_change:+.2f}%")
-
-        print("Source: SEC Company Facts API via DuckDB")
-        return
-
-    # One metric for one year, or the latest year
-    if years:
-        query = f"""
-            SELECT YEAR(CAST("end" AS DATE)), {column}
-            FROM apple_financial_summary
-            WHERE YEAR(CAST("end" AS DATE)) = ?
-        """
-        result = connection.execute(query, [years[0]]).fetchone()
+    # Latest available fiscal year
     else:
         query = f"""
-            SELECT YEAR(CAST("end" AS DATE)), {column}
+            SELECT
+                YEAR(CAST("end" AS DATE)) AS fiscal_year,
+                {columns}
             FROM apple_financial_summary
             ORDER BY CAST("end" AS DATE) DESC
             LIMIT 1
         """
-        result = connection.execute(query).fetchone()
+
+        rows = connection.execute(
+            query
+        ).fetchall()
 
     connection.close()
 
-    if result is None:
-        requested_year = years[0] if years else "the latest year"
-        print(f"No financial data was found for {requested_year}.")
+    if not rows:
+        print("No matching financial data was found.")
         return
 
-    fiscal_year, value = result
-    formatted_value = f"{value:.2f}%" if unit == "%" else f"${value:.2f}B"
+    # Report requested years that are unavailable
+    if years:
+        returned_years = {
+            int(row[0])
+            for row in rows
+        }
 
-    print(f"{label} in FY{int(fiscal_year)}: {formatted_value}")
-    print("Source: SEC Company Facts API via DuckDB")
+        missing_years = [
+            year
+            for year in years
+            if year not in returned_years
+        ]
+
+        if missing_years:
+            missing_text = ", ".join(
+                f"FY{year}"
+                for year in missing_years
+            )
+
+            print(
+                f"No financial data was found for: "
+                f"{missing_text}\n"
+            )
+
+    # Display one metric for one year
+    if len(rows) == 1 and len(metrics) == 1:
+        fiscal_year = int(rows[0][0])
+        value = rows[0][1]
+        _, label, unit = metrics[0]
+
+        if unit == "%":
+            formatted_value = f"{value:.2f}%"
+        else:
+            formatted_value = f"${value:.2f}B"
+
+        print(
+            f"{label} in FY{fiscal_year}: "
+            f"{formatted_value}"
+        )
+
+    # Display all year × metric combinations
+    else:
+        print("Financial metrics by fiscal year:")
+
+        for row in rows:
+            fiscal_year = int(row[0])
+            values = row[1:]
+
+            print(f"\nFY{fiscal_year}")
+
+            for metric, value in zip(
+                metrics,
+                values,
+            ):
+                _, label, unit = metric
+
+                if unit == "%":
+                    formatted_value = f"{value:.2f}%"
+                else:
+                    formatted_value = f"${value:.2f}B"
+
+                print(
+                    f"{label}: "
+                    f"{formatted_value}"
+                )
+
+    # Calculate changes from the first year to the last year
+    if len(rows) > 1:
+        first_row = rows[0]
+        last_row = rows[-1]
+
+        first_year = int(first_row[0])
+        last_year = int(last_row[0])
+
+        print(
+            f"\nOverall change from "
+            f"FY{first_year} to FY{last_year}:"
+        )
+
+        for metric_index, metric in enumerate(
+            metrics,
+            start=1,
+        ):
+            _, label, unit = metric
+
+            first_value = first_row[metric_index]
+            last_value = last_row[metric_index]
+            value_change = last_value - first_value
+
+            if unit == "%":
+                print(
+                    f"{label}: "
+                    f"{value_change:+.2f} "
+                    f"percentage points"
+                )
+
+            else:
+                sign = (
+                    "+"
+                    if value_change >= 0
+                    else "-"
+                )
+
+                growth = (
+                    value_change
+                    / first_value
+                    * 100
+                )
+
+                print(
+                    f"{label}: "
+                    f"{sign}${abs(value_change):.2f}B"
+                )
+
+                print(
+                    f"{label} growth: "
+                    f"{growth:+.2f}%"
+                )
+
+    # Preserve highest/lowest output for trend questions
+    if show_trend and len(metrics) == 1:
+        _, label, _ = metrics[0]
+
+        highest_row = max(
+            rows,
+            key=lambda row: row[1],
+        )
+
+        lowest_row = min(
+            rows,
+            key=lambda row: row[1],
+        )
+
+        print(
+            f"Highest year: "
+            f"FY{int(highest_row[0])}"
+        )
+
+        print(
+            f"Lowest year: "
+            f"FY{int(lowest_row[0])}"
+        )
+
+    print(
+        "\nSource: "
+        "SEC Company Facts API via DuckDB"
+    )
 
 
 def load_risk_chunks() -> list[dict]:
@@ -338,6 +405,16 @@ def answer_question(question: str) -> None:
             "This question is outside the scope of Apple financial "
             "and 10-K risk analysis."
         )
+
+def get_answer(question: str) -> str:
+    """Return the local financial or risk answer as text."""
+
+    output = StringIO()
+
+    with redirect_stdout(output):
+        answer_question(question)
+
+    return output.getvalue().strip()
 
 
 def main() -> None:
