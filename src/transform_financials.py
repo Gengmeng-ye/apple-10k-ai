@@ -3,20 +3,19 @@
 import json
 from pathlib import Path
 
-import duckdb
 import pandas as pd
 
 
 RAW_DATA_FILE = Path("data/raw/apple_companyfacts.json")
-DATABASE_FILE = Path("warehouse/apple_finance.duckdb")
+PROCESSED_DATA_FILE = Path("data/processed/apple_financial_summary.parquet")
 
 
-# Map output column names to SEC US-GAAP concepts
+# Map output columns to SEC US-GAAP concepts
 FINANCIAL_CONCEPTS = {
-    "revenue_billions": ("RevenueFromContractWithCustomerExcludingAssessedTax"),
+    "revenue_billions": "RevenueFromContractWithCustomerExcludingAssessedTax",
     "operating_income_billions": "OperatingIncomeLoss",
     "net_income_billions": "NetIncomeLoss",
-    "operating_cash_flow_billions": ("NetCashProvidedByUsedInOperatingActivities"),
+    "operating_cash_flow_billions": "NetCashProvidedByUsedInOperatingActivities",
 }
 
 
@@ -38,7 +37,7 @@ def extract_annual_metric(
     data = pd.DataFrame(records)
 
     # Keep annual records from 10-K filings
-    data = data[(data["form"] == "10-K")& (data["fp"] == "FY")]
+    data = data[(data["form"] == "10-K") & (data["fp"] == "FY")]
 
     # Keep the latest filing for each fiscal year
     data = data.sort_values("filed")
@@ -51,8 +50,7 @@ def extract_annual_metric(
     return data[["end", column_name]]
 
 
-def build_financial_summary(company_facts: dict,
-) -> pd.DataFrame:
+def build_financial_summary(company_facts: dict) -> pd.DataFrame:
     """Build Apple's annual financial summary."""
 
     financial_tables = []
@@ -68,39 +66,34 @@ def build_financial_summary(company_facts: dict,
     financial_summary = financial_tables[0]
 
     for table in financial_tables[1:]:
-        financial_summary = financial_summary.merge(table, on="end",)
+        financial_summary = financial_summary.merge(table, on="end")
 
     financial_summary["operating_margin_pct"] = (
         financial_summary["operating_income_billions"]
         / financial_summary["revenue_billions"]
-        * 100)
+        * 100
+    )
 
     financial_summary["net_profit_margin_pct"] = (
         financial_summary["net_income_billions"]
         / financial_summary["revenue_billions"]
-        * 100)
+        * 100
+    )
 
     return financial_summary
 
 
-def save_to_duckdb(financial_summary: pd.DataFrame) -> None:
-    """Save the financial summary to DuckDB."""
+def save_to_parquet(financial_summary: pd.DataFrame) -> None:
+    """Save processed financial data as Parquet."""
 
-    connection = duckdb.connect(str(DATABASE_FILE))
-    connection.register("financial_summary_df", financial_summary)
+    PROCESSED_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    financial_summary.to_parquet(PROCESSED_DATA_FILE, index=False)
 
-    connection.execute("""
-        CREATE OR REPLACE TABLE apple_financial_summary AS
-        SELECT * FROM financial_summary_df
-        """ )
-
-    connection.close()
-
-    print(f"\nSaved to DuckDB: {DATABASE_FILE}")
+    print(f"\nSaved to Parquet: {PROCESSED_DATA_FILE}")
 
 
-def main():
-    """Run the financial transformation pipeline."""
+def main() -> None:
+    """Run the financial transformation process."""
 
     company_facts = load_company_facts()
     financial_summary = build_financial_summary(company_facts)
@@ -109,7 +102,7 @@ def main():
     print(financial_summary.tail(5).round(2).to_string(index=False))
     print(f"\nTotal rows: {len(financial_summary)}")
 
-    save_to_duckdb(financial_summary)
+    save_to_parquet(financial_summary)
 
 
 if __name__ == "__main__":
