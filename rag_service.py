@@ -5,6 +5,9 @@ import re
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from dotenv import load_dotenv
+from openai import OpenAI
+
 
 import duckdb
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -13,6 +16,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 DATABASE_FILE = Path("warehouse/apple_finance.duckdb")
 CHUNKS_FILE = Path("data/processed/apple_risk_chunks.json")
+METADATA_FILE = Path("data/filings/apple_latest_10k_metadata.json")
+OPENAI_MODEL = "gpt-5.6"
+
 
 FINANCIAL_METRICS = {
     "operating cash flow": (
@@ -69,6 +75,20 @@ RISK_KEYWORDS = [
     "legal",
     "intellectual property",
 ]
+
+
+def load_filing_metadata() -> dict:
+    """Load metadata for Apple's latest 10-K filing."""
+
+    with METADATA_FILE.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def create_openai_client() -> OpenAI:
+    """Create an OpenAI client using the API key from .env."""
+
+    load_dotenv()
+    return OpenAI()
 
 
 def find_financial_metrics(question: str) -> list[tuple]:
@@ -317,6 +337,135 @@ def retrieve_risk_evidence(
         evidence.append(result)
 
     return evidence
+
+
+def generate_risk_answer(question: str) -> str:
+    """Generate an evidence-grounded risk answer with SEC citations."""
+
+    evidence = retrieve_risk_evidence(question)
+    metadata = load_filing_metadata()
+
+    if not evidence or evidence[0]["retrieval_score"] == 0:
+        return "No relevant Risk Factors evidence was found."
+
+    evidence_text = "\n\n".join(
+        (
+            f"[{index}] Topic: {result['topic_label']}\n"
+            f"Chunk ID: {result['chunk_id']}\n"
+            f"SEC excerpt:\n{result['text']}"
+        )
+        for index, result in enumerate(evidence, start=1)
+    )
+
+    instructions = """
+You are a financial research assistant analyzing Apple SEC filings.
+
+Answer only from the supplied SEC excerpts.
+Do not add facts that are not supported by the excerpts.
+Distinguish a disclosed risk from an event that actually occurred.
+Write a concise but analytical answer.
+Cite supporting evidence using [1], [2], or [3].
+If the evidence is insufficient, clearly say so.
+Do not invent citations, URLs, numbers, or dates.
+"""
+
+    prompt = f"""
+Question:
+{question}
+
+SEC Risk Factors evidence:
+{evidence_text}
+"""
+
+    client = create_openai_client()
+    response = client.responses.create(
+        model=OPENAI_MODEL,
+        instructions=instructions,
+        input=prompt,
+    )
+
+    citation_lines = "\n".join(
+    (
+        f"[{index}] {metadata['company']} {metadata['form']}, "
+        f"Item 1A. Risk Factors, retrieved chunk "
+        f"{result['chunk_id']}"
+    )
+    for index, result in enumerate(evidence, start=1)
+)
+
+    source = (
+        f"{metadata['company']} {metadata['form']}, "
+        f"filed {metadata['filing_date']}\n"
+        f"{metadata['source_url']}"
+    )
+
+    return (
+        f"{response.output_text.strip()}\n\n"
+        f"References:\n{citation_lines}\n\n"
+        f"SEC filing:\n{source}"
+    )
+
+
+def generate_financial_answer(question: str) -> str:
+    """Generate a financial answer grounded in local DuckDB results."""
+
+    output = StringIO()
+
+    with redirect_stdout(output):
+        query_financial_data(question)
+
+    financial_evidence = output.getvalue().strip()
+
+    if (
+        "No matching financial data was found." in financial_evidence
+        or "Please specify a supported financial metric." in financial_evidence
+    ):
+        return financial_evidence
+
+    metadata = load_filing_metadata()
+
+    instructions = """
+You are a financial research assistant analyzing Apple financial data.
+
+Answer only from the supplied financial evidence.
+Do not invent financial values, dates, explanations, or business causes.
+Preserve the distinction between percentage change and percentage-point change.
+Use fiscal years, such as FY2025, when discussing annual results.
+Provide a concise but analytical interpretation of the numbers.
+Cite financial claims using [F1].
+If the evidence does not explain why a metric changed, do not speculate about causes.
+"""
+
+    prompt = f"""
+Question:
+{question}
+
+Financial evidence retrieved from the local DuckDB database:
+{financial_evidence}
+"""
+
+    client = create_openai_client()
+    response = client.responses.create(
+        model=OPENAI_MODEL,
+        instructions=instructions,
+        input=prompt,
+    )
+
+    company_facts_url = (
+        "https://data.sec.gov/api/xbrl/companyfacts/"
+        f"CIK{metadata['cik']}.json"
+    )
+
+    reference = (
+        f"[F1] SEC Company Facts API — "
+        f"{metadata['company']} (CIK {metadata['cik']})\n"
+        f"{company_facts_url}"
+    )
+
+    return (
+        f"{response.output_text.strip()}\n\n"
+        f"References:\n{reference}"
+    )
 
 
 def print_risk_evidence(question: str) -> None:
