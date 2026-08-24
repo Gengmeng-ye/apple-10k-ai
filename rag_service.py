@@ -91,6 +91,36 @@ def create_openai_client() -> OpenAI:
     return OpenAI()
 
 
+def clean_generated_answer(answer: str) -> str:
+    """Normalize model output for the dashboard chat renderer."""
+
+    cleaned_lines = []
+
+    for raw_line in answer.splitlines():
+        line = raw_line.strip().replace("**", "")
+
+        if not line:
+            if cleaned_lines and cleaned_lines[-1] != "":
+                cleaned_lines.append("")
+            continue
+
+        if re.fullmatch(r"\|?[\s:|-]+\|?", line):
+            continue
+
+        if "|" in line:
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if cells and cells[0].lower() in {"fiscal year", "year"}:
+                continue
+            if len(cells) >= 2:
+                details = ", ".join(cell for cell in cells[1:] if cell)
+                cleaned_lines.append(f"{cells[0]}: {details}")
+                continue
+
+        cleaned_lines.append(line.lstrip("# "))
+
+    return "\n".join(cleaned_lines).strip()
+
+
 def find_financial_metrics(question: str) -> list[tuple]:
     """Find all financial metrics mentioned in the question."""
 
@@ -367,6 +397,10 @@ Write a concise but analytical answer.
 Cite supporting evidence using [1], [2], or [3].
 If the evidence is insufficient, clearly say so.
 Do not invent citations, URLs, numbers, or dates.
+Return plain text only.
+Do not use Markdown tables, Markdown headings, or bold markers.
+Start with a direct answer, then briefly explain the significance of the disclosed risks.
+Keep the response compact for a dashboard chat interface.
 """
 
     prompt = f"""
@@ -400,7 +434,7 @@ SEC Risk Factors evidence:
     )
 
     return (
-        f"{response.output_text.strip()}\n\n"
+        f"{clean_generated_answer(response.output_text)}\n\n"
         f"References:\n{citation_lines}\n\n"
         f"SEC filing:\n{source}"
     )
@@ -434,6 +468,17 @@ Use fiscal years, such as FY2025, when discussing annual results.
 Provide a concise but analytical interpretation of the numbers.
 Cite financial claims using [F1].
 If the evidence does not explain why a metric changed, do not speculate about causes.
+Do not use Markdown tables.
+Do not use Markdown headings.
+Use no more than two short paragraphs.
+Use simple bullet points only when they improve readability.
+Keep the response compact for display in a dashboard chat interface.
+Return plain text only and do not use bold markers.
+Start with a direct answer, followed by one sentence interpreting the direction
+and magnitude of the change. For multi-year questions, identify whether the
+trend was consistent and which interval changed the most. Do not speculate
+about business causes unless they appear in the supplied evidence.
+Avoid subjective labels such as moderate, strong, or significant unless the supplied evidence includes a relevant benchmark.
 """
 
     prompt = f"""
@@ -451,19 +496,14 @@ Financial evidence retrieved from the local DuckDB database:
         input=prompt,
     )
 
-    company_facts_url = (
-        "https://data.sec.gov/api/xbrl/companyfacts/"
-        f"CIK{metadata['cik']}.json"
-    )
-
     reference = (
-        f"[F1] SEC Company Facts API — "
-        f"{metadata['company']} (CIK {metadata['cik']})\n"
-        f"{company_facts_url}"
-    )
+    f"[F1] {metadata['company']} {metadata['form']} — "
+    f"Financial Statements, filed {metadata['filing_date']}\n"
+    f"{metadata['source_url']}"
+)
 
     return (
-        f"{response.output_text.strip()}\n\n"
+        f"{clean_generated_answer(response.output_text)}\n\n"
         f"References:\n{reference}"
     )
 
@@ -509,14 +549,20 @@ def answer_question(question: str) -> None:
 
 
 def get_answer(question: str) -> str:
-    """Return the local financial or risk answer as text."""
+    """Return an AI-generated answer grounded in local evidence."""
 
-    output = StringIO()
+    question_type = classify_question(question)
 
-    with redirect_stdout(output):
-        answer_question(question)
+    if question_type == "financial":
+        return generate_financial_answer(question)
 
-    return output.getvalue().strip()
+    if question_type == "risk":
+        return generate_risk_answer(question)
+
+    return (
+        "This question is outside the scope of Apple financial "
+        "and 10-K risk analysis."
+    )
 
 
 def main() -> None:
