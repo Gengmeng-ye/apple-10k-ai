@@ -62,12 +62,24 @@ def trend_chart(data: pd.DataFrame) -> go.Figure:
             marker={"size": 8, "color": color, "symbol": symbol, "line": {"color": "white", "width": 1}},
             hovertemplate=f"{name}: $%{{y:.2f}}B<extra></extra>",
         )
+    year_values = years.tolist()
     figure.update_layout(
-        height=380, margin={"l": 25, "r": 18, "t": 52, "b": 20},
+        height=400, margin={"l": 20, "r": 32, "t": 56, "b": 68},
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
-        xaxis={"tickvals": years.tolist(), "ticktext": [f"FY{year}" for year in years], "showgrid": False},
-        yaxis={"title": "USD billions", "gridcolor": "#EEEEEE", "zeroline": False},
-        legend={"orientation": "h", "y": 1.04, "x": 0.5, "xanchor": "center"},
+        xaxis={
+            "tickvals": year_values,
+            "ticktext": [f"FY{year}" for year in years],
+            "range": [min(year_values) - .55, max(year_values) + .55],
+            "showgrid": False,
+            "automargin": True,
+        },
+        yaxis={"gridcolor": "#EEEEEE", "zeroline": False, "automargin": True},
+        annotations=[{
+            "text": "USD billions", "xref": "paper", "yref": "paper",
+            "x": 0, "y": 1.12, "xanchor": "center", "yanchor": "bottom",
+            "showarrow": False, "font": {"size": 12, "color": "#7A8297"},
+        }],
+        legend={"orientation": "h", "y": 1.16, "x": 0.5, "xanchor": "center"},
         font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 13},
     )
     return figure
@@ -88,13 +100,150 @@ def margin_chart(data: pd.DataFrame) -> go.Figure:
         marker={"size": 10, "color": "#198F88", "line": {"color": "white", "width": 1.5}},
         hovertemplate="Net Profit Margin: %{y:.2f}%<extra></extra>",
     )
+    year_values = years.tolist()
     figure.update_layout(
-        height=380, margin={"l": 25, "r": 18, "t": 52, "b": 20}, bargap=.52,
+        height=400, margin={"l": 20, "r": 32, "t": 56, "b": 68}, bargap=.52,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
-        xaxis={"tickvals": years.tolist(), "ticktext": [f"FY{year}" for year in years], "showgrid": False},
-        yaxis={"title": "Margin (%)", "gridcolor": "#EEEEEE", "zeroline": False},
-        legend={"orientation": "h", "y": 1.04, "x": .5, "xanchor": "center"},
+        xaxis={
+            "tickvals": year_values,
+            "ticktext": [f"FY{year}" for year in years],
+            "range": [min(year_values) - .55, max(year_values) + .55],
+            "showgrid": False,
+            "automargin": True,
+        },
+        yaxis={"gridcolor": "#EEEEEE", "zeroline": False, "automargin": True},
+        annotations=[{
+            "text": "Margin (%)", "xref": "paper", "yref": "paper",
+            "x": 0, "y": 1.12, "xanchor": "center", "yanchor": "bottom",
+            "showarrow": False, "font": {"size": 12, "color": "#7A8297"},
+        }],
+        legend={"orientation": "h", "y": 1.16, "x": .5, "xanchor": "center"},
         font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 13},
+    )
+    return figure
+
+
+def assets_liabilities_chart(data: pd.DataFrame) -> go.Figure:
+    """Compare total assets and total liabilities by fiscal year."""
+    years = pd.to_datetime(data["end"]).dt.year
+    year_values = years.tolist()
+    figure = go.Figure()
+    figure.add_bar(
+        x=years,
+        y=data["total_assets_billions"],
+        name="Total Assets",
+        marker_color="#82A5DF",
+        hovertemplate="Total Assets: $%{y:.2f}B<extra></extra>",
+    )
+    figure.add_bar(
+        x=years,
+        y=data["total_liabilities_billions"],
+        name="Total Liabilities",
+        marker_color="#BDCCEB",
+        hovertemplate="Total Liabilities: $%{y:.2f}B<extra></extra>",
+    )
+    figure.update_layout(
+        height=390,
+        margin={"l": 20, "r": 34, "t": 60, "b": 62},
+        barmode="group",
+        bargap=.34,
+        bargroupgap=.08,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis={
+            "tickvals": year_values,
+            "ticktext": [f"FY{year}" for year in years],
+            "range": [min(year_values) - .58, max(year_values) + .58],
+            "showgrid": False,
+            "automargin": True,
+        },
+        yaxis={
+            "gridcolor": "#EEEEEE",
+            "zeroline": False,
+            "automargin": True,
+        },
+        annotations=[{
+            "text": "USD billions", "xref": "paper", "yref": "paper",
+            "x": 0, "y": 1.12, "xanchor": "center", "yanchor": "bottom",
+            "showarrow": False, "font": {"size": 12, "color": "#7A8297"},
+        }],
+        legend={"orientation": "h", "y": 1.16, "x": .5, "xanchor": "center"},
+        font={
+            "family": "Avenir Next, Helvetica Neue, Arial",
+            "color": "#4E555A",
+            "size": 12,
+        },
+    )
+    return figure
+
+
+def cash_position_chart(data: pd.DataFrame) -> go.Figure:
+    """Show the five-year cash and cash equivalents trend."""
+    years = pd.to_datetime(data["end"]).dt.year
+    year_values = years.tolist()
+    figure = go.Figure()
+    figure.add_scatter(
+        x=years,
+        y=data["cash_and_cash_equivalents_billions"],
+        name="Cash and Cash Equivalents",
+        mode="lines+markers",
+        line={"color": "#198F88", "width": 4},
+        marker={
+            "size": 10,
+            "color": "#198F88",
+            "line": {"color": "white", "width": 1.5},
+        },
+        fill="tozeroy",
+        fillcolor="rgba(25,143,136,.06)",
+        hovertemplate="Cash: $%{y:.2f}B<extra></extra>",
+    )
+    figure.update_layout(
+        height=390,
+        margin={"l": 20, "r": 30, "t": 54, "b": 62},
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis={
+            "tickvals": year_values,
+            "ticktext": [f"FY{year}" for year in years],
+            "range": [min(year_values) - .58, max(year_values) + .58],
+            "showgrid": False,
+            "automargin": True,
+        },
+        yaxis={
+            "range": [0, 42],
+            "dtick": 10,
+            "showgrid": False,
+            "zeroline": False,
+            "automargin": True,
+        },
+        shapes=[{
+            "type": "line",
+            "xref": "paper",
+            "yref": "y",
+            "x0": 0,
+            "x1": 1,
+            "y0": tick,
+            "y1": tick,
+            "layer": "below",
+            "line": {"color": "#E7E9ED", "width": 1},
+        } for tick in [0, 10, 20, 30, 40]],
+        annotations=[{
+            "text": "USD billions",
+            "xref": "paper",
+            "yref": "paper",
+            "x": 0,
+            "y": 1.12,
+            "xanchor": "center",
+            "yanchor": "bottom",
+            "showarrow": False,
+            "font": {"size": 12, "color": "#7A8297"},
+        }],
+        font={
+            "family": "Avenir Next, Helvetica Neue, Arial",
+            "color": "#4E555A",
+            "size": 12,
+        },
     )
     return figure
 
@@ -110,10 +259,14 @@ def risk_chart(summary: pd.DataFrame) -> go.Figure:
         hovertemplate="<b>%{y}</b><br>%{x} filing excerpts<extra></extra>",
     ))
     figure.update_layout(
-        height=330, margin={"l": 8, "r": 82, "t": 12, "b": 8}, bargap=.5, showlegend=False,
+        height=330, margin={"l": 28, "r": 82, "t": 4, "b": 38}, bargap=.42, showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis={"visible": False, "range": [0, maximum * 1.22]},
-        yaxis={"showgrid": False, "tickfont": {"size": 12, "color": "#525960"}},
+        yaxis={
+            "showgrid": False,
+            "automargin": True,
+            "tickfont": {"size": 12, "color": "#525960"},
+        },
         font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 12},
     )
     return figure
@@ -255,7 +408,7 @@ def render_chat_page() -> None:
             prompt_left, example_one, example_two, example_three, prompt_right = st.columns([.35, 1, 1, 1, .35], gap="small")
             examples = [
                 (example_one, "Compare revenue in 2024 and 2025", "Compare Apple's revenue in 2024 and 2025."),
-                (example_two, "Show the past three years", "Show Apple's revenue over the past three years."),
+                (example_two, "Compare assets, liabilities, and cash", "Compare Apple's assets, liabilities, and cash in 2023, 2024, and 2025."),
                 (example_three, "What are Apple’s supply-chain risks?", "What supply chain risks does Apple disclose?"),
             ]
             for column, label, example_question in examples:
@@ -318,12 +471,14 @@ render_html("""
 div[data-testid="stRadio"]{width:440px;margin:1.1rem auto .2rem}div[data-testid="stRadio"]>label{display:none!important}div[data-testid="stRadio"] div[role="radiogroup"]{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#F1F2F6;border:1px solid #E1E3EB;border-radius:11px}div[data-testid="stRadio"] div[role="radiogroup"]>label{min-height:38px;display:flex!important;align-items:center;justify-content:center;padding:.42rem .85rem!important;background:transparent;border:0;border-radius:8px;color:#666C72;font-size:.82rem;font-weight:620;cursor:pointer}div[data-testid="stRadio"] div[role="radiogroup"]>label:has(input:checked){background:#FFF;color:var(--dark);box-shadow:0 2px 8px rgba(37,42,65,.10)}div[data-testid="stRadio"] div[role="radiogroup"]>label>div:first-child{display:none!important}
 div[data-testid="stImage"]{margin-top:.85rem}div[data-testid="stImage"] img{width:100%;height:270px;object-fit:cover;object-position:center 49%;border-radius:10px}.hero-copy{max-width:1120px;margin:1.35rem auto 0;text-align:center}.hero-title{font-size:clamp(2.45rem,3.7vw,3.15rem);font-weight:680;line-height:1.08;letter-spacing:-.105rem;white-space:nowrap}.hero-title em{color:var(--primary);font:inherit;font-style:normal}.hero-description{max-width:680px;margin:.8rem auto 0;color:var(--soft);font-size:1rem;line-height:1.65}
 .section-heading{margin:1.9rem auto 1rem;text-align:center}.section-kicker{color:var(--primary);font-size:1.9rem;font-weight:650;text-transform:uppercase}.section-title{font-size:1.9rem;font-weight:650;letter-spacing:-.035rem;margin-top:.35rem}.section-description{max-width:680px;margin:.6rem auto 0;color:var(--soft);font-size:.96rem;line-height:1.6}
-div[data-testid="stTabs"] button{color:var(--soft);font-size:.92rem}.stApp button[role="tab"][aria-selected="true"]{color:var(--dark)!important;font-weight:700;box-shadow:inset 0 -2px 0 var(--primary)!important}
+div[data-testid="stTabs"] button{color:var(--soft)!important;font-size:.92rem;border-bottom-color:transparent!important}div[data-testid="stTabs"] button p{color:inherit!important}div[data-testid="stTabs"] button[aria-selected="true"]{color:var(--dark)!important;font-weight:700!important;border-bottom-color:var(--primary)!important;box-shadow:inset 0 -2px 0 var(--primary)!important}div[data-testid="stTabs"] button[aria-selected="true"] p{color:var(--dark)!important}
 .year-label{text-align:center;color:var(--soft);font-size:.76rem;font-weight:700;letter-spacing:.06rem;text-transform:uppercase;margin:.5rem 0}.metric-card{min-height:142px;padding:1.35rem;border:1px solid var(--line);border-radius:10px}.metric-label{color:#6D7377;font-size:.73rem;font-weight:700;letter-spacing:.075rem;text-transform:uppercase}.metric-value{font-size:1.85rem;font-weight:650;margin-top:.72rem}.metric-note{color:var(--soft);font-size:.79rem;margin-top:.42rem}
 div[data-testid="stSelectbox"] [data-baseweb="select"]>div{min-height:52px;background:#F0F2F6;border:0!important;border-radius:12px}div[data-testid="stSelectbox"] [data-baseweb="select"]>div>div:first-child{flex:1!important;justify-content:center!important;padding-left:38px!important}
 .chat-page-heading{max-width:720px;margin:2.1rem auto 1.15rem;text-align:center}.chat-page-title{margin-top:.4rem;font-size:1.7rem;font-weight:680;letter-spacing:-.03rem}.chat-page-description{max-width:580px;margin:.45rem auto 0;color:var(--soft);font-size:.88rem;line-height:1.5}.conversation-label{max-width:800px;margin:1.25rem auto .2rem;color:#858A8E;font-size:.68rem;font-weight:700;letter-spacing:.08rem;text-transform:uppercase}.conversation-stream{max-width:800px;margin:0 auto}.conversation-turn{margin:0;padding:1.35rem 0 1.15rem;border-bottom:1px solid #ECEDEF}.conversation-turn:last-child{border-bottom:0}.chat-user-row{display:flex;justify-content:flex-end;margin-bottom:1.15rem}.chat-user-bubble{max-width:70%;padding:.65rem .9rem;background:#F0F1F6;border-radius:18px 18px 5px 18px;color:#30343A;font-size:.94rem;line-height:1.55}.chat-assistant-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:.75rem;align-items:start}.chat-avatar{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:var(--primary);border-radius:50%;color:#FFF;font-size:.61rem;font-weight:750}.chat-answer{max-width:720px;padding:.02rem 0;color:#343A3F;font-size:.96rem;line-height:1.72}.chat-name{margin-bottom:.42rem;color:var(--ink);font-size:.82rem;font-weight:700}.chat-ready{max-width:800px;margin:2.2rem auto 1rem;padding:1rem;text-align:center;color:#8A8F93;font-size:.84rem}.answer-heading{font-size:.9rem;font-weight:650;color:var(--ink);margin:.85rem 0 .34rem}.answer-year-row{display:flex;align-items:flex-start;gap:.06rem;margin:.78rem 0 .3rem}.answer-year{display:inline-flex;align-items:center;margin:0;padding:.18rem .56rem;background:#ECEEFB;border-radius:999px;color:var(--dark);font-size:.76rem;font-weight:650;letter-spacing:.01em}.answer-line{color:#454C51;margin:.24rem 0;line-height:1.62}.answer-bullet{position:relative;color:#454C51;margin:.28rem 0;padding-left:1rem;line-height:1.58}.answer-bullet:before{content:"";position:absolute;left:.1rem;top:.67rem;width:4px;height:4px;border-radius:50%;background:#6C73CF}.answer-evidence-title{margin:.85rem 0 .32rem;padding-top:.7rem;border-top:1px solid #ECEDEF;color:var(--dark);font-size:.82rem;font-weight:650}.answer-source,.answer-citation{color:#7A8288;font-size:.74rem;font-weight:400;line-height:1.5;margin:.2rem 0}.answer-inline-citation{display:inline-block;margin-left:.05rem;color:#6971B7!important;font-size:.66em;font-weight:500;line-height:0;text-decoration:none!important;border:0!important;vertical-align:super}.answer-inline-citation sup{font-size:inherit;font-weight:inherit;text-decoration:none!important}.answer-inline-citation:hover{color:#4D559E!important;text-decoration:none!important}.answer-reference-label{color:inherit;font-weight:inherit}.answer-source-link{margin-top:.38rem}.answer-source-link a{color:#626996;font-size:.74rem;font-weight:500;text-decoration:none}.answer-source-link a:hover{color:var(--dark);text-decoration:underline}.snapshot-subheading{margin:2.4rem auto 1rem;text-align:center}.snapshot-title{font-size:1.45rem;font-weight:680}.snapshot-description{margin:.45rem auto 0;color:var(--soft);font-size:.9rem}div[data-testid="stButton"] button{min-height:38px;background:#FFF;border:1px solid var(--line);border-radius:10px;color:#596066;font-size:.76rem}div[data-testid="stButton"] button:hover{background:#F7F7FA;border-color:#BFC4E8;color:var(--dark)}div[data-testid="stForm"]{position:sticky;bottom:1rem;z-index:20;max-width:800px;margin:1rem auto 0;padding:.42rem;background:#FFF;border:1px solid #D8DAE2;border-radius:18px;box-shadow:0 10px 32px rgba(29,34,55,.12)}div[data-testid="stTextInput"] input{min-height:48px;border:0!important;background:#FFF;border-radius:14px;font-size:.92rem}div[data-testid="stFormSubmitButton"] button{width:48px!important;height:48px;min-height:48px;margin:0;background:var(--primary);border:0;border-radius:14px;color:white;font-size:1.15rem;font-weight:700}
-div[data-testid="stPlotlyChart"]{padding:.75rem;background:#FFF;border:1px solid var(--line);border-radius:10px}.takeaway-wrap{margin-top:1rem;padding:1.15rem 1.25rem;border:1px solid var(--line);border-radius:10px}.takeaway-header{display:flex;justify-content:space-between;padding-bottom:.85rem;border-bottom:1px solid var(--line)}.takeaway-title{font-size:1.05rem;font-weight:700}.takeaway-summary{color:var(--soft);font-size:.9rem}.takeaway-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:1rem}.takeaway-item{padding:0 1rem;border-left:1px solid var(--line)}.takeaway-item:first-child{border:0;padding-left:0}.takeaway-value{font-size:1.55rem;font-weight:680}.takeaway-label{color:var(--soft);font-size:.86rem;margin-top:.3rem}.positive{color:var(--positive)}.negative{color:var(--negative)}
-.table-shell{width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:10px}.financial-table{width:100%;border-collapse:collapse;font-size:.81rem}.financial-table th,.financial-table td{padding:.9rem .55rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center!important}.financial-table th{background:#F6F6F8;color:#555C61}.risk-label{color:var(--dark);font-size:.75rem;font-weight:700;letter-spacing:.07rem;text-transform:uppercase;margin:.15rem 0 .65rem}.risk-summary{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;background:#F0F2F6;border-radius:12px;font-size:.82rem}.risk-detail{height:356px;overflow:hidden;display:flex;flex-direction:column;padding:1.2rem 1.25rem;background:#F8FAFD;border:1px solid #D8E4F0;border-radius:10px}.risk-detail-title{font-size:1rem;font-weight:700;margin-bottom:.65rem}.risk-detail-text{flex:1;overflow-y:auto;color:#555D63;font-size:.84rem;line-height:1.62}.risk-source{color:#7A8288;font-size:.72rem;margin-top:.75rem;padding-top:.75rem;border-top:1px solid #D8E4F0}.risk-note{color:#7A8288;font-size:.74rem;margin-top:.65rem}.footer{margin-top:3.5rem;padding-top:1.25rem;border-top:1px solid var(--line);color:#747A7E;font-size:.76rem;line-height:1.7;text-align:center}
+div[data-testid="stPlotlyChart"]{padding:.75rem;background:#FFF;border:1px solid var(--line);border-radius:10px}.takeaway-wrap{margin-top:1rem;padding:1.15rem 1.25rem;border:1px solid var(--line);border-radius:10px}.takeaway-header{display:flex;justify-content:space-between;padding-bottom:.85rem;border-bottom:1px solid var(--line)}.takeaway-title{font-size:1.05rem;font-weight:700}.takeaway-summary{color:var(--soft);font-size:.9rem}.takeaway-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:1rem}.takeaway-item{padding:0 1.45rem;border-left:1px solid var(--line)}.takeaway-item:first-child{border:0;padding-left:.65rem}.takeaway-item:last-child{padding-right:.65rem}.takeaway-value{font-size:1.55rem;font-weight:680}.takeaway-label{color:var(--soft);font-size:.86rem;margin-top:.3rem}.positive{color:var(--positive)}.negative{color:var(--negative)}
+.st-key-risk_coverage_chart,.st-key-risk_coverage_chart>div,.st-key-risk_coverage_chart div[data-testid="stPlotlyChart"]{overflow:hidden!important}
+.balance-chart-title{margin:.15rem 0 .65rem;text-align:center;color:var(--ink);font-size:.9rem;font-weight:680}.balance-note{margin:.25rem auto 0;text-align:center;color:var(--soft);font-size:.74rem;line-height:1.5}
+.table-shell{width:100%;overflow:hidden;border:1px solid var(--line);border-radius:10px}.financial-table{width:100%;border:0;border-collapse:separate;border-spacing:0;font-size:.81rem}.financial-table th,.financial-table td{padding:.9rem .55rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center!important}.financial-table tbody tr:last-child td{border-bottom:0}.financial-table th:last-child,.financial-table td:last-child{border-right:0}.financial-table th{background:#F6F6F8;color:#555C61}.risk-label{color:var(--dark);font-size:.75rem;font-weight:700;letter-spacing:.07rem;text-transform:uppercase;margin:.15rem 0 .65rem}.risk-summary{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;background:#F0F2F6;border-radius:12px;font-size:.82rem}.risk-detail{box-sizing:border-box;height:330px;overflow:hidden;display:flex;flex-direction:column;padding:1.2rem 1.25rem;background:#F8FAFD;border:1px solid #D8E4F0;border-radius:10px}.risk-detail-title{font-size:1rem;font-weight:700;margin-bottom:.65rem}.risk-detail-text{flex:1;overflow-y:auto;color:#555D63;font-size:.84rem;line-height:1.62}.risk-source{color:#7A8288;font-size:.72rem;margin-top:.75rem;padding-top:.75rem;border-top:1px solid #D8E4F0}.risk-note{color:#7A8288;font-size:.74rem;margin-top:.65rem}.footer{margin-top:3.5rem;padding-top:1.25rem;border-top:1px solid var(--line);color:#747A7E;font-size:.76rem;line-height:1.7;text-align:center}
 .conversation-turn{max-width:800px!important;margin-left:auto!important;margin-right:auto!important}
 div[data-testid="stSegmentedControl"]{width:440px;margin:.8rem auto .05rem}div[data-testid="stSegmentedControl"]>label{display:none!important}div[data-testid="stSegmentedControl"] [data-baseweb="button-group"]{width:100%;padding:4px;background:#F1F2F6;border:1px solid #E1E3EB;border-radius:11px}div[data-testid="stSegmentedControl"] button{flex:1;min-height:38px;border:0;border-radius:8px;color:#666C72;font-size:.82rem;font-weight:620}div[data-testid="stSegmentedControl"] button[aria-pressed="true"]{background:#FFF;color:var(--dark);box-shadow:0 2px 8px rgba(37,42,65,.10)}
 div[data-testid="stForm"]{position:static;bottom:auto;z-index:auto;margin:1.45rem auto 0;box-shadow:0 8px 24px rgba(29,34,55,.10)}
@@ -425,7 +580,7 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
 .st-key-chat_workspace .st-key-conversation_panel{
     margin-bottom:-1.75rem!important;
 }
-@media(max-width:900px){div[data-testid="stImage"] img{height:220px}.hero-title{font-size:2.55rem;white-space:normal}.takeaway-grid{grid-template-columns:repeat(2,1fr)}.data-status{display:none}.financial-table{min-width:920px}div[data-testid="stSegmentedControl"]{width:100%}}
+@media(max-width:900px){div[data-testid="stImage"] img{height:220px}.hero-title{font-size:2.55rem;white-space:normal}.takeaway-grid{grid-template-columns:repeat(2,1fr)}.data-status{display:none}.table-shell{overflow-x:auto}.financial-table{min-width:920px}div[data-testid="stSegmentedControl"]{width:100%}}
 </style>
 """)
 
@@ -453,9 +608,7 @@ if active_page == "Ask Apple’s Filings":
 
 # Financial dashboard hero.
 render_html("""
-<div class="hero-copy"><div class="hero-title"><em>Apple’s</em> Financial Performance, Visualized.</div>
-<div class="hero-description">This dashboard turns Apple’s SEC filings into an interactive view of its financial performance. Select a fiscal year to review the results and see how they have changed over time.</div>
-</div>
+<div class="hero-copy"><div class="hero-title"><em>Apple’s</em> Financial Performance, Visualized.</div></div>
 """)
 
 
@@ -490,7 +643,9 @@ for column, (label, value, note) in zip(st.columns(4), metrics):
 render_html("""
 <div class="section-heading"><div class="section-kicker">02 · Analysis</div><div class="section-title">Five-year financial direction</div></div>
 """)
-trend_tab, profitability_tab, data_tab = st.tabs(["Financial trends", "Profitability", "Underlying data"])
+trend_tab, profitability_tab, balance_sheet_tab, data_tab = st.tabs(
+    ["Financial trends", "Profitability", "Balance sheet", "Underlying data"]
+)
 with trend_tab:
     st.plotly_chart(trend_chart(data), use_container_width=True, config={"displayModeBar": False})
     render_html(f"""
@@ -502,11 +657,31 @@ with trend_tab:
     """)
 with profitability_tab:
     st.plotly_chart(margin_chart(data), use_container_width=True, config={"displayModeBar": False})
+with balance_sheet_tab:
+    balance_left, balance_right = st.columns(2, gap="large")
+    with balance_left:
+        render_html('<div class="balance-chart-title">Assets and liabilities</div>')
+        st.plotly_chart(
+            assets_liabilities_chart(data),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    with balance_right:
+        render_html('<div class="balance-chart-title">Cash position</div>')
+        st.plotly_chart(
+            cash_position_chart(data),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    render_html(
+        '<div class="balance-note">Cash is shown separately because its scale is '
+        'much smaller than total assets and liabilities.</div>'
+    )
 with data_tab:
     table = data.copy()
     table["Fiscal Year"] = pd.to_datetime(table["end"]).dt.year
-    table = table[["Fiscal Year", "revenue_billions", "operating_income_billions", "net_income_billions", "operating_cash_flow_billions", "operating_margin_pct", "net_profit_margin_pct", "revenue_growth_pct"]]
-    table.columns = ["Fiscal Year", "Revenue ($B)", "Operating Income ($B)", "Net Income ($B)", "Operating Cash Flow ($B)", "Operating Margin (%)", "Net Margin (%)", "Revenue Growth (%)"]
+    table = table[["Fiscal Year", "revenue_billions", "operating_income_billions", "net_income_billions", "operating_cash_flow_billions", "total_assets_billions", "total_liabilities_billions", "cash_and_cash_equivalents_billions", "operating_margin_pct", "net_profit_margin_pct", "revenue_growth_pct"]]
+    table.columns = ["Fiscal Year", "Revenue ($B)", "Operating Income ($B)", "Net Income ($B)", "Operating Cash Flow ($B)", "Total Assets ($B)", "Total Liabilities ($B)", "Cash ($B)", "Operating Margin (%)", "Net Margin (%)", "Revenue Growth (%)"]
     render_html(f'<div class="table-shell">{table.round(2).to_html(index=False, classes="financial-table", border=0, na_rep="—")}</div>')
 
 
@@ -526,7 +701,12 @@ topic_rows = risk_chunks[risk_chunks["topic_label"] == selected_topic].sort_valu
 excerpt = str(topic_rows.iloc[0]["text"]).strip()
 left, right = st.columns(2, gap="large")
 with left:
-    st.plotly_chart(risk_chart(risk_summary), use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(
+        risk_chart(risk_summary),
+        use_container_width=True,
+        config={"displayModeBar": False},
+        key="risk_coverage_chart",
+    )
     render_html('<div class="risk-note">Bars show filing excerpt coverage, not risk severity.</div>')
 with right:
     render_html(f'<div class="risk-detail"><div class="risk-detail-title">{escape(selected_topic)}</div><div class="risk-detail-text">{escape(excerpt)}</div><div class="risk-source">Source: Apple FY{latest_year} Form 10-K · Item 1A</div></div>')
