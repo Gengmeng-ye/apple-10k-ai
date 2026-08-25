@@ -3,6 +3,7 @@
 from rag_service import (
     build_deterministic_financial_answer,
     classify_question,
+    find_financial_metrics,
     should_retrieve_mda,
 )
 
@@ -73,3 +74,78 @@ def test_single_value_answer_keeps_one_inline_citation():
 
     assert body.count("[F1]") == 1
     assert references.count("[F1]") == 1
+
+
+def test_balance_sheet_questions_are_routed_as_financial():
+    questions = [
+        "What were Apple's total assets in 2025?",
+        "Compare Apple's liabilities in 2024 and 2025.",
+        "How did Apple's cash position change over the past five years?",
+    ]
+
+    for question in questions:
+        assert classify_question(question) == "financial"
+
+
+def test_balance_sheet_metric_aliases_map_to_expected_columns():
+    metrics = find_financial_metrics(
+        "Compare Apple's assets, liabilities, and cash in 2024 and 2025."
+    )
+    columns = [column for column, _, _ in metrics]
+
+    assert columns == [
+        "total_assets_billions",
+        "total_liabilities_billions",
+        "cash_and_cash_equivalents_billions",
+    ]
+    assert len(columns) == len(set(columns))
+
+
+def test_operating_cash_flow_is_not_misread_as_cash_balance():
+    metrics = find_financial_metrics(
+        "What was Apple's operating cash flow in 2025?"
+    )
+
+    assert metrics == [
+        (
+            "operating_cash_flow_billions",
+            "Operating Cash Flow",
+            "$B",
+        )
+    ]
+
+
+def test_plural_balance_sheet_metric_uses_correct_grammar():
+    answer = build_deterministic_financial_answer(
+        "What were Apple's total assets in 2025?",
+        "Total Assets in FY2025: $359.24B",
+        METADATA,
+    )
+
+    assert "total assets in FY2025 were $359.24B [F1]" in answer
+
+
+def test_mixed_multi_year_trend_states_net_direction():
+    evidence = """Financial metrics by fiscal year:
+
+FY2023
+Total Liabilities: $290.44B
+
+FY2024
+Total Liabilities: $308.03B
+
+FY2025
+Total Liabilities: $285.51B
+
+Overall change from FY2023 to FY2025:
+Total Liabilities: -$4.93B
+Total Liabilities growth: -1.70%
+"""
+    answer = build_deterministic_financial_answer(
+        "Compare Apple's total liabilities in 2023, 2024, and 2025.",
+        evidence,
+        METADATA,
+    )
+
+    assert "Varied across the reported intervals" in answer
+    assert "decreased by $4.93B (1.70%) overall" in answer

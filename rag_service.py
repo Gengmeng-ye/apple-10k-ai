@@ -22,6 +22,41 @@ OPENAI_MODEL = "gpt-5.6"
 
 
 FINANCIAL_METRICS = {
+    "cash and cash equivalents": (
+        "cash_and_cash_equivalents_billions",
+        "Cash and Cash Equivalents",
+        "$B",
+    ),
+    "cash position": (
+        "cash_and_cash_equivalents_billions",
+        "Cash and Cash Equivalents",
+        "$B",
+    ),
+    "total liabilities": (
+        "total_liabilities_billions",
+        "Total Liabilities",
+        "$B",
+    ),
+    "liabilities": (
+        "total_liabilities_billions",
+        "Total Liabilities",
+        "$B",
+    ),
+    "total assets": (
+        "total_assets_billions",
+        "Total Assets",
+        "$B",
+    ),
+    "assets": (
+        "total_assets_billions",
+        "Total Assets",
+        "$B",
+    ),
+    "cash": (
+        "cash_and_cash_equivalents_billions",
+        "Cash and Cash Equivalents",
+        "$B",
+    ),
     "operating cash flow": (
         "operating_cash_flow_billions",
         "Operating Cash Flow",
@@ -265,7 +300,22 @@ def describe_metric_change(
     elif all(change <= 0 for change in changes):
         pattern = f"{verb.capitalize()} in every reported interval"
     else:
-        pattern = "Varied across the reported intervals"
+        pattern = (
+            "Varied across the reported intervals, "
+            f"but {verb} by {change_text} overall"
+        )
+
+    if len(changes) == 1:
+        return (
+            f"- {label}: {verb.capitalize()} by {change_text} "
+            f"from FY{years[0]} to FY{years[1]}"
+        )
+
+    if "Varied" in pattern:
+        return (
+            f"- {label}: {pattern}; the largest annual change was "
+            f"FY{largest_start}–FY{largest_end} ({interval_text})"
+        )
 
     return (
         f"- {label}: {pattern}, with an overall change of {change_text}; "
@@ -291,7 +341,20 @@ def build_deterministic_financial_answer(
 
     if single_value:
         label, year, value = single_value
-        body = f"Apple’s {label.lower()} in FY{year} was {value} [F1]."
+        linking_verb = (
+            "were"
+            if label
+            in {
+                "Total Assets",
+                "Total Liabilities",
+                "Cash and Cash Equivalents",
+            }
+            else "was"
+        )
+        body = (
+            f"Apple’s {label.lower()} in FY{year} "
+            f"{linking_verb} {value} [F1]."
+        )
     elif yearly_values:
         years = sorted(yearly_values)
         metrics = find_financial_metrics(question)
@@ -337,6 +400,9 @@ def find_financial_metrics(question: str) -> list[tuple]:
     matches = []
 
     for keyword, metric in FINANCIAL_METRICS.items():
+        if keyword == "cash" and "cash flow" in question_lower:
+            continue
+
         position = question_lower.find(keyword)
 
         if position != -1:

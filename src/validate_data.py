@@ -14,6 +14,9 @@ REQUIRED_COLUMNS = {
     "operating_income_billions",
     "net_income_billions",
     "operating_cash_flow_billions",
+    "total_assets_billions",
+    "total_liabilities_billions",
+    "cash_and_cash_equivalents_billions",
     "operating_margin_pct",
     "net_profit_margin_pct",
 }
@@ -47,6 +50,16 @@ def validate_financial_data(data: pd.DataFrame) -> None:
 
     if (data["revenue_billions"] <= 0).any():
         raise ValueError("Revenue must be positive.")
+
+    positive_balance_sheet_columns = {
+        "total_assets_billions",
+        "total_liabilities_billions",
+        "cash_and_cash_equivalents_billions",
+    }
+
+    for column in positive_balance_sheet_columns:
+        if (data[column] <= 0).any():
+            raise ValueError(f"{column} must be positive.")
 
     if not data["operating_margin_pct"].between(0, 100).all():
         raise ValueError("Operating margin is outside the expected range.")

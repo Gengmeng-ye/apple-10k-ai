@@ -16,6 +16,11 @@ FINANCIAL_CONCEPTS = {
     "operating_income_billions": "OperatingIncomeLoss",
     "net_income_billions": "NetIncomeLoss",
     "operating_cash_flow_billions": "NetCashProvidedByUsedInOperatingActivities",
+    "total_assets_billions": "Assets",
+    "total_liabilities_billions": "Liabilities",
+    "cash_and_cash_equivalents_billions": (
+        "CashAndCashEquivalentsAtCarryingValue"
+    ),
 }
 
 
