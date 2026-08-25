@@ -29,3 +29,9 @@ logs/*
 !outputs/.gitkeep
 !logs/.gitkeep
 !data/filings/.gitkeep
+
+# Include lightweight deployment data
+!warehouse/apple_finance.duckdb
+!data/processed/apple_financial_summary.parquet
+!data/processed/apple_risk_chunks.json
+!data/processed/apple_mda_chunks.json
