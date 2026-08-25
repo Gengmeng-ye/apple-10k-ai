@@ -21,6 +21,12 @@ RISK_FILE = Path("data/processed/apple_risk_chunks.json")
 st.set_page_config(page_title="Apple 10-K Financial Analyst", page_icon="🍎", layout="wide")
 
 
+@st.cache_data(show_spinner=False, ttl=900)
+def get_cached_answer(question: str) -> str:
+    """Reuse identical grounded answers briefly to avoid repeat API waits."""
+    return get_answer(question)
+
+
 def render_html(html: str) -> None:
     """Render compact HTML."""
     st.markdown(" ".join(line.strip() for line in html.splitlines()), unsafe_allow_html=True)
@@ -29,6 +35,15 @@ def render_html(html: str) -> None:
 def fill_example_question(question: str) -> None:
     """Copy a suggested question into the question input."""
     st.session_state.qa_input = question
+
+
+def queue_question() -> None:
+    """Queue one question from either Enter or the send button."""
+    question = st.session_state.get("qa_input", "").strip()
+
+    if question:
+        st.session_state.pending_question = question
+        st.session_state.qa_input = ""
 
 
 def trend_chart(data: pd.DataFrame) -> go.Figure:
@@ -104,9 +119,29 @@ def risk_chart(summary: pd.DataFrame) -> go.Figure:
     return figure
 
 
-def format_answer_html(answer_text: str) -> str:
+def format_answer_html(answer_text: str, message_index: int) -> str:
     """Convert grounded AI output into clean dashboard HTML."""
     parts = []
+
+    def citation_target(label: str) -> str:
+        """Return a unique reference anchor for one conversation turn."""
+        return f"answer-{message_index}-reference-{label.lower()}"
+
+    def format_inline_citations(text: str) -> str:
+        """Render grounded citations as linked superscripts."""
+        safe_text = escape(text)
+        safe_text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", safe_text)
+
+        def replace_citation(match: re.Match) -> str:
+            label = match.group(1)
+            target = citation_target(label)
+            return (
+                f'<a class="answer-inline-citation" href="#{target}" '
+                f'aria-label="Reference {label}"><sup>[{label}]</sup></a>'
+            )
+
+        return re.sub(r"\[((?:F|M)?\d+)\]", replace_citation, safe_text)
+
     for raw_line in answer_text.splitlines():
         line = raw_line.strip()
         if not line or set(line) == {"="}:
@@ -116,24 +151,37 @@ def format_answer_html(answer_text: str) -> str:
         if re.fullmatch(r"\|?[\s:|-]+\|?", line):
             continue
 
-        safe_line = escape(line)
-        safe_line = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", safe_line)
+        reference_match = re.match(r"^\[((?:F|M)?\d+)\]\s*(.*)$", line)
+        year_heading_match = re.match(r"^(FY20\d{2}):?(?:\s+(.*))?$", line)
+        safe_line = format_inline_citations(line)
 
         if line.startswith("http://") or line.startswith("https://"):
             safe_url = escape(line, quote=True)
             parts.append(
                 '<div class="answer-source-link">'
                 f'<a href="{safe_url}" target="_blank" rel="noopener noreferrer">'
-                "View Apple' s SEC filing &#8599;</a></div>"
+                "View Apple’s SEC filing &#8599;</a></div>"
             )
         elif line.startswith("Source:"):
             parts.append(f'<div class="answer-source">{safe_line}</div>')
-        elif line.startswith("[F") or re.match(r"^\[\d+\]", line):
-            parts.append(f'<div class="answer-citation">{safe_line}</div>')
+        elif reference_match:
+            label, description = reference_match.groups()
+            target = citation_target(label)
+            parts.append(
+                f'<div class="answer-citation" id="{target}">'
+                f'<span class="answer-reference-label">[{escape(label)}]</span> '
+                f'{escape(description)}</div>'
+            )
         elif line.startswith("Chunk "):
             parts.append(f'<div class="answer-evidence-title">{safe_line}</div>')
-        elif line.startswith("FY") and line[2:6].isdigit():
-            parts.append(f'<div class="answer-year">{safe_line}</div>')
+        elif year_heading_match:
+            year_label, citation_text = year_heading_match.groups()
+            parts.append(
+                '<div class="answer-year-row">'
+                f'<span class="answer-year">{escape(year_label)}</span>'
+                f'{format_inline_citations(citation_text or "")}'
+                '</div>'
+            )
         elif line.endswith(":") or line in {
             "Retrieved Risk Factors evidence:",
             "Financial metrics by fiscal year:",
@@ -152,6 +200,8 @@ def render_chat_page() -> None:
         st.session_state.chat_history = []
     if "qa_input" not in st.session_state:
         st.session_state.qa_input = ""
+
+    pending_question = st.session_state.pop("pending_question", None)
 
     render_html("""
     <div class="chat-page-heading">
@@ -173,7 +223,7 @@ def render_chat_page() -> None:
                 st.rerun()
 
             with st.container(height=560, border=False, key="conversation_panel"):
-                for message in st.session_state.chat_history:
+                for message_index, message in enumerate(st.session_state.chat_history):
                     render_html(
                         f"""
                         <div class="conversation-turn">
@@ -191,7 +241,7 @@ def render_chat_page() -> None:
                                 </div>
                                 <div class="chat-answer">
                                     <div class="chat-name">Apple Financial Analyst</div>
-                                    {format_answer_html(message['answer'])}
+                                    {format_answer_html(message['answer'], message_index)}
                                 </div>
                             </div>
                         </div>
@@ -218,26 +268,31 @@ def render_chat_page() -> None:
                         key=f"example_{example_question}",
                     )
 
-        with st.form("apple_question_form", clear_on_submit=False):
+        with st.container(key="question_composer"):
             input_column, send_column = st.columns([8, .46], gap="small")
             with input_column:
-                question = st.text_input(
+                st.text_input(
                     "Question",
                     placeholder="Message Apple Financial Analyst...",
                     label_visibility="collapsed",
                     key="qa_input",
+                    on_change=queue_question,
                 )
             with send_column:
-                submitted = st.form_submit_button("↑", use_container_width=True)
+                st.button(
+                    "↑",
+                    use_container_width=True,
+                    key="send_question",
+                    on_click=queue_question,
+                )
 
-    if submitted:
-        if question.strip():
-            with st.spinner("Reviewing Apple’s financial data and 10-K..."):
-                answer = get_answer(question.strip())
-            st.session_state.chat_history.append({"question": question.strip(), "answer": answer})
-            st.rerun()
-        else:
-            st.warning("Please enter a question.")
+    if pending_question:
+        with st.spinner("Reviewing Apple’s financial data and 10-K..."):
+            answer = get_cached_answer(pending_question)
+        st.session_state.chat_history.append(
+            {"question": pending_question, "answer": answer}
+        )
+        st.rerun()
 
 
 data = calculate_financial_metrics(load_financial_data()).reset_index(drop=True)
@@ -266,7 +321,7 @@ div[data-testid="stImage"]{margin-top:.85rem}div[data-testid="stImage"] img{widt
 div[data-testid="stTabs"] button{color:var(--soft);font-size:.92rem}.stApp button[role="tab"][aria-selected="true"]{color:var(--dark)!important;font-weight:700;box-shadow:inset 0 -2px 0 var(--primary)!important}
 .year-label{text-align:center;color:var(--soft);font-size:.76rem;font-weight:700;letter-spacing:.06rem;text-transform:uppercase;margin:.5rem 0}.metric-card{min-height:142px;padding:1.35rem;border:1px solid var(--line);border-radius:10px}.metric-label{color:#6D7377;font-size:.73rem;font-weight:700;letter-spacing:.075rem;text-transform:uppercase}.metric-value{font-size:1.85rem;font-weight:650;margin-top:.72rem}.metric-note{color:var(--soft);font-size:.79rem;margin-top:.42rem}
 div[data-testid="stSelectbox"] [data-baseweb="select"]>div{min-height:52px;background:#F0F2F6;border:0!important;border-radius:12px}div[data-testid="stSelectbox"] [data-baseweb="select"]>div>div:first-child{flex:1!important;justify-content:center!important;padding-left:38px!important}
-.chat-page-heading{max-width:720px;margin:2.1rem auto 1.15rem;text-align:center}.chat-page-title{margin-top:.4rem;font-size:1.7rem;font-weight:680;letter-spacing:-.03rem}.chat-page-description{max-width:580px;margin:.45rem auto 0;color:var(--soft);font-size:.88rem;line-height:1.5}.conversation-label{max-width:800px;margin:1.25rem auto .2rem;color:#858A8E;font-size:.68rem;font-weight:700;letter-spacing:.08rem;text-transform:uppercase}.conversation-stream{max-width:800px;margin:0 auto}.conversation-turn{margin:0;padding:1.35rem 0 1.15rem;border-bottom:1px solid #ECEDEF}.conversation-turn:last-child{border-bottom:0}.chat-user-row{display:flex;justify-content:flex-end;margin-bottom:1.15rem}.chat-user-bubble{max-width:70%;padding:.65rem .9rem;background:#F0F1F6;border-radius:18px 18px 5px 18px;color:#30343A;font-size:.94rem;line-height:1.55}.chat-assistant-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:.75rem;align-items:start}.chat-avatar{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:var(--primary);border-radius:50%;color:#FFF;font-size:.61rem;font-weight:750}.chat-answer{max-width:720px;padding:.02rem 0;color:#343A3F;font-size:.96rem;line-height:1.72}.chat-name{margin-bottom:.42rem;color:var(--ink);font-size:.82rem;font-weight:700}.chat-ready{max-width:800px;margin:2.2rem auto 1rem;padding:1rem;text-align:center;color:#8A8F93;font-size:.84rem}.answer-heading{font-size:.9rem;font-weight:700;color:var(--ink);margin:.8rem 0 .32rem}.answer-year{display:inline-block;margin:.65rem 0 .22rem;padding:.16rem .48rem;background:#ECEEFB;border-radius:999px;color:var(--dark);font-size:.78rem;font-weight:700}.answer-line{color:#454C51;margin:.26rem 0;line-height:1.65}.answer-bullet{position:relative;color:#454C51;margin:.3rem 0;padding-left:1rem;line-height:1.6}.answer-bullet:before{content:"";position:absolute;left:.1rem;top:.7rem;width:4px;height:4px;border-radius:50%;background:var(--primary)}.answer-evidence-title{margin:.85rem 0 .32rem;padding-top:.7rem;border-top:1px solid #ECEDEF;color:var(--dark);font-size:.82rem;font-weight:700}.answer-source,.answer-citation{color:#7A8288;font-size:.74rem;line-height:1.5;margin:.2rem 0}.answer-source-link{margin-top:.3rem}.answer-source-link a{color:var(--dark);font-size:.75rem;font-weight:650;text-decoration:none}.answer-source-link a:hover{text-decoration:underline}.snapshot-subheading{margin:2.4rem auto 1rem;text-align:center}.snapshot-title{font-size:1.45rem;font-weight:680}.snapshot-description{margin:.45rem auto 0;color:var(--soft);font-size:.9rem}div[data-testid="stButton"] button{min-height:38px;background:#FFF;border:1px solid var(--line);border-radius:10px;color:#596066;font-size:.76rem}div[data-testid="stButton"] button:hover{background:#F7F7FA;border-color:#BFC4E8;color:var(--dark)}div[data-testid="stForm"]{position:sticky;bottom:1rem;z-index:20;max-width:800px;margin:1rem auto 0;padding:.42rem;background:#FFF;border:1px solid #D8DAE2;border-radius:18px;box-shadow:0 10px 32px rgba(29,34,55,.12)}div[data-testid="stTextInput"] input{min-height:48px;border:0!important;background:#FFF;border-radius:14px;font-size:.92rem}div[data-testid="stFormSubmitButton"] button{width:48px!important;height:48px;min-height:48px;margin:0;background:var(--primary);border:0;border-radius:14px;color:white;font-size:1.15rem;font-weight:700}
+.chat-page-heading{max-width:720px;margin:2.1rem auto 1.15rem;text-align:center}.chat-page-title{margin-top:.4rem;font-size:1.7rem;font-weight:680;letter-spacing:-.03rem}.chat-page-description{max-width:580px;margin:.45rem auto 0;color:var(--soft);font-size:.88rem;line-height:1.5}.conversation-label{max-width:800px;margin:1.25rem auto .2rem;color:#858A8E;font-size:.68rem;font-weight:700;letter-spacing:.08rem;text-transform:uppercase}.conversation-stream{max-width:800px;margin:0 auto}.conversation-turn{margin:0;padding:1.35rem 0 1.15rem;border-bottom:1px solid #ECEDEF}.conversation-turn:last-child{border-bottom:0}.chat-user-row{display:flex;justify-content:flex-end;margin-bottom:1.15rem}.chat-user-bubble{max-width:70%;padding:.65rem .9rem;background:#F0F1F6;border-radius:18px 18px 5px 18px;color:#30343A;font-size:.94rem;line-height:1.55}.chat-assistant-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:.75rem;align-items:start}.chat-avatar{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:var(--primary);border-radius:50%;color:#FFF;font-size:.61rem;font-weight:750}.chat-answer{max-width:720px;padding:.02rem 0;color:#343A3F;font-size:.96rem;line-height:1.72}.chat-name{margin-bottom:.42rem;color:var(--ink);font-size:.82rem;font-weight:700}.chat-ready{max-width:800px;margin:2.2rem auto 1rem;padding:1rem;text-align:center;color:#8A8F93;font-size:.84rem}.answer-heading{font-size:.9rem;font-weight:650;color:var(--ink);margin:.85rem 0 .34rem}.answer-year-row{display:flex;align-items:flex-start;gap:.06rem;margin:.78rem 0 .3rem}.answer-year{display:inline-flex;align-items:center;margin:0;padding:.18rem .56rem;background:#ECEEFB;border-radius:999px;color:var(--dark);font-size:.76rem;font-weight:650;letter-spacing:.01em}.answer-line{color:#454C51;margin:.24rem 0;line-height:1.62}.answer-bullet{position:relative;color:#454C51;margin:.28rem 0;padding-left:1rem;line-height:1.58}.answer-bullet:before{content:"";position:absolute;left:.1rem;top:.67rem;width:4px;height:4px;border-radius:50%;background:#6C73CF}.answer-evidence-title{margin:.85rem 0 .32rem;padding-top:.7rem;border-top:1px solid #ECEDEF;color:var(--dark);font-size:.82rem;font-weight:650}.answer-source,.answer-citation{color:#7A8288;font-size:.74rem;font-weight:400;line-height:1.5;margin:.2rem 0}.answer-inline-citation{display:inline-block;margin-left:.05rem;color:#6971B7!important;font-size:.66em;font-weight:500;line-height:0;text-decoration:none!important;border:0!important;vertical-align:super}.answer-inline-citation sup{font-size:inherit;font-weight:inherit;text-decoration:none!important}.answer-inline-citation:hover{color:#4D559E!important;text-decoration:none!important}.answer-reference-label{color:inherit;font-weight:inherit}.answer-source-link{margin-top:.38rem}.answer-source-link a{color:#626996;font-size:.74rem;font-weight:500;text-decoration:none}.answer-source-link a:hover{color:var(--dark);text-decoration:underline}.snapshot-subheading{margin:2.4rem auto 1rem;text-align:center}.snapshot-title{font-size:1.45rem;font-weight:680}.snapshot-description{margin:.45rem auto 0;color:var(--soft);font-size:.9rem}div[data-testid="stButton"] button{min-height:38px;background:#FFF;border:1px solid var(--line);border-radius:10px;color:#596066;font-size:.76rem}div[data-testid="stButton"] button:hover{background:#F7F7FA;border-color:#BFC4E8;color:var(--dark)}div[data-testid="stForm"]{position:sticky;bottom:1rem;z-index:20;max-width:800px;margin:1rem auto 0;padding:.42rem;background:#FFF;border:1px solid #D8DAE2;border-radius:18px;box-shadow:0 10px 32px rgba(29,34,55,.12)}div[data-testid="stTextInput"] input{min-height:48px;border:0!important;background:#FFF;border-radius:14px;font-size:.92rem}div[data-testid="stFormSubmitButton"] button{width:48px!important;height:48px;min-height:48px;margin:0;background:var(--primary);border:0;border-radius:14px;color:white;font-size:1.15rem;font-weight:700}
 div[data-testid="stPlotlyChart"]{padding:.75rem;background:#FFF;border:1px solid var(--line);border-radius:10px}.takeaway-wrap{margin-top:1rem;padding:1.15rem 1.25rem;border:1px solid var(--line);border-radius:10px}.takeaway-header{display:flex;justify-content:space-between;padding-bottom:.85rem;border-bottom:1px solid var(--line)}.takeaway-title{font-size:1.05rem;font-weight:700}.takeaway-summary{color:var(--soft);font-size:.9rem}.takeaway-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:1rem}.takeaway-item{padding:0 1rem;border-left:1px solid var(--line)}.takeaway-item:first-child{border:0;padding-left:0}.takeaway-value{font-size:1.55rem;font-weight:680}.takeaway-label{color:var(--soft);font-size:.86rem;margin-top:.3rem}.positive{color:var(--positive)}.negative{color:var(--negative)}
 .table-shell{width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:10px}.financial-table{width:100%;border-collapse:collapse;font-size:.81rem}.financial-table th,.financial-table td{padding:.9rem .55rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center!important}.financial-table th{background:#F6F6F8;color:#555C61}.risk-label{color:var(--dark);font-size:.75rem;font-weight:700;letter-spacing:.07rem;text-transform:uppercase;margin:.15rem 0 .65rem}.risk-summary{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;background:#F0F2F6;border-radius:12px;font-size:.82rem}.risk-detail{height:356px;overflow:hidden;display:flex;flex-direction:column;padding:1.2rem 1.25rem;background:#F8FAFD;border:1px solid #D8E4F0;border-radius:10px}.risk-detail-title{font-size:1rem;font-weight:700;margin-bottom:.65rem}.risk-detail-text{flex:1;overflow-y:auto;color:#555D63;font-size:.84rem;line-height:1.62}.risk-source{color:#7A8288;font-size:.72rem;margin-top:.75rem;padding-top:.75rem;border-top:1px solid #D8E4F0}.risk-note{color:#7A8288;font-size:.74rem;margin-top:.65rem}.footer{margin-top:3.5rem;padding-top:1.25rem;border-top:1px solid var(--line);color:#747A7E;font-size:.76rem;line-height:1.7;text-align:center}
 .conversation-turn{max-width:800px!important;margin-left:auto!important;margin-right:auto!important}
@@ -287,6 +342,10 @@ div[data-testid="stForm"] div[data-testid="stTextInput"] div[data-baseweb="input
 .chat-page-heading+div div[data-testid="stButton"] button{border-radius:999px;background:#FCFCFE;border-color:#D9DCEF}.chat-page-heading+div div[data-testid="stButton"] button:hover{background:#F2F3FB;border-color:#C5CAEB}.conversation-label{max-width:1120px;margin:.75rem auto .25rem}div[data-testid="stVerticalBlockBorderWrapper"]{background:#F8FAFC;border-color:#DDE4EC!important;box-shadow:0 8px 24px rgba(29,34,55,.035)}
 
 /* Shared chat alignment and clearer visual hierarchy. */
+.chat-page-heading,.st-key-chat_workspace,.chat-source-note,
+.st-key-chat_workspace input,.st-key-chat_workspace button{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif!important;
+}
 .st-key-conversation_panel,div[data-testid="stForm"]{width:100%!important;max-width:1120px!important;margin-left:auto!important;margin-right:auto!important;box-sizing:border-box!important}
 .st-key-conversation_panel,.st-key-conversation_panel>div{background:#F8FAFC!important}
 .st-key-conversation_panel .chat-user-bubble{background:#E7EAF4!important;border:1px solid #DDE1EE}
@@ -304,6 +363,42 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
     padding:0;
     border-top:0!important;
     transform:translateY(14px);
+}
+
+/* One composer handles both Enter and button submission. */
+.st-key-question_composer{
+    width:100%;
+    max-width:none;
+    margin:.45rem 0 1.4rem;
+}
+.st-key-question_composer div[data-testid="stTextInput"] div[data-baseweb="input"]{
+    min-height:46px!important;
+    height:46px!important;
+    background:#FFF!important;
+    border:1px solid #D7DCE6!important;
+    border-radius:14px!important;
+    box-shadow:0 7px 20px rgba(37,48,73,.09)!important;
+}
+.st-key-question_composer div[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within{
+    border-color:#AEB6E8!important;
+    box-shadow:0 10px 30px rgba(75,86,160,.14)!important;
+}
+.st-key-question_composer div[data-testid="stTextInput"] input{
+    min-height:44px!important;
+    height:44px!important;
+}
+.st-key-question_composer div[data-testid="stButton"] button{
+    width:44px!important;
+    height:44px!important;
+    min-height:44px!important;
+    margin:0!important;
+    background:var(--primary)!important;
+    border:0!important;
+    border-radius:13px!important;
+    color:#FFF!important;
+    font-size:1rem!important;
+    font-weight:700!important;
+    box-shadow:0 4px 12px rgba(91,99,201,.18)!important;
 }
 
 .st-key-chat_workspace div[data-testid="stForm"]{
