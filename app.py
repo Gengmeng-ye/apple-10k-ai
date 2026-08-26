@@ -46,7 +46,7 @@ def queue_question() -> None:
         st.session_state.qa_input = ""
 
 
-def trend_chart(data: pd.DataFrame) -> go.Figure:
+def trend_chart(data: pd.DataFrame, mobile: bool = False) -> go.Figure:
     """Create the five-year financial chart."""
     years = pd.to_datetime(data["end"]).dt.year
     figure = go.Figure()
@@ -64,7 +64,8 @@ def trend_chart(data: pd.DataFrame) -> go.Figure:
         )
     year_values = years.tolist()
     figure.update_layout(
-        height=400, margin={"l": 20, "r": 32, "t": 56, "b": 68},
+        height=300 if mobile else 400,
+        margin={"l": 8, "r": 12, "t": 54, "b": 38} if mobile else {"l": 20, "r": 32, "t": 56, "b": 68},
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
         xaxis={
             "tickvals": year_values,
@@ -76,16 +77,20 @@ def trend_chart(data: pd.DataFrame) -> go.Figure:
         yaxis={"gridcolor": "#EEEEEE", "zeroline": False, "automargin": True},
         annotations=[{
             "text": "USD billions", "xref": "paper", "yref": "paper",
-            "x": 0, "y": 1.12, "xanchor": "center", "yanchor": "bottom",
-            "showarrow": False, "font": {"size": 12, "color": "#7A8297"},
+            "x": 0, "y": 1.08 if mobile else 1.12, "xanchor": "center", "yanchor": "bottom",
+            "showarrow": False, "font": {"size": 9 if mobile else 12, "color": "#7A8297"},
         }],
-        legend={"orientation": "h", "y": 1.16, "x": 0.5, "xanchor": "center"},
-        font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 13},
+        legend={
+            "orientation": "h", "y": 1.13 if mobile else 1.16,
+            "x": .56 if mobile else .5, "xanchor": "center",
+            "font": {"size": 9 if mobile else 13},
+        },
+        font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 9 if mobile else 13},
     )
     return figure
 
 
-def margin_chart(data: pd.DataFrame) -> go.Figure:
+def margin_chart(data: pd.DataFrame, mobile: bool = False) -> go.Figure:
     """Create the profitability chart."""
     years = pd.to_datetime(data["end"]).dt.year
     figure = go.Figure()
@@ -102,7 +107,9 @@ def margin_chart(data: pd.DataFrame) -> go.Figure:
     )
     year_values = years.tolist()
     figure.update_layout(
-        height=400, margin={"l": 20, "r": 32, "t": 56, "b": 68}, bargap=.52,
+        height=300 if mobile else 400,
+        margin={"l": 8, "r": 12, "t": 48, "b": 38} if mobile else {"l": 20, "r": 32, "t": 56, "b": 68},
+        bargap=.58 if mobile else .52,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
         xaxis={
             "tickvals": year_values,
@@ -114,16 +121,16 @@ def margin_chart(data: pd.DataFrame) -> go.Figure:
         yaxis={"gridcolor": "#EEEEEE", "zeroline": False, "automargin": True},
         annotations=[{
             "text": "Margin (%)", "xref": "paper", "yref": "paper",
-            "x": 0, "y": 1.12, "xanchor": "center", "yanchor": "bottom",
-            "showarrow": False, "font": {"size": 12, "color": "#7A8297"},
+            "x": 0, "y": 1.07 if mobile else 1.12, "xanchor": "center", "yanchor": "bottom",
+            "showarrow": False, "font": {"size": 9 if mobile else 12, "color": "#7A8297"},
         }],
-        legend={"orientation": "h", "y": 1.16, "x": .5, "xanchor": "center"},
-        font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 13},
+        legend={"orientation": "h", "y": 1.12 if mobile else 1.16, "x": .56 if mobile else .5, "xanchor": "center", "font": {"size": 9 if mobile else 13}},
+        font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 9 if mobile else 13},
     )
     return figure
 
 
-def assets_liabilities_chart(data: pd.DataFrame) -> go.Figure:
+def assets_liabilities_chart(data: pd.DataFrame, mobile: bool = False) -> go.Figure:
     """Compare total assets and total liabilities by fiscal year."""
     years = pd.to_datetime(data["end"]).dt.year
     year_values = years.tolist()
@@ -143,8 +150,8 @@ def assets_liabilities_chart(data: pd.DataFrame) -> go.Figure:
         hovertemplate="Total Liabilities: $%{y:.2f}B<extra></extra>",
     )
     figure.update_layout(
-        height=390,
-        margin={"l": 20, "r": 34, "t": 60, "b": 62},
+        height=285 if mobile else 390,
+        margin={"l": 8, "r": 10, "t": 64, "b": 34} if mobile else {"l": 20, "r": 34, "t": 60, "b": 62},
         barmode="group",
         bargap=.34,
         bargroupgap=.08,
@@ -162,22 +169,26 @@ def assets_liabilities_chart(data: pd.DataFrame) -> go.Figure:
             "zeroline": False,
             "automargin": True,
         },
-        annotations=[{
+        annotations=([{
+            "text": "<b>Assets and liabilities</b>", "xref": "paper", "yref": "paper",
+            "x": .5, "y": 1.25, "xanchor": "center", "yanchor": "top",
+            "showarrow": False, "font": {"size": 11, "color": "#182126"},
+        }] if mobile else []) + [{
             "text": "USD billions", "xref": "paper", "yref": "paper",
-            "x": 0, "y": 1.12, "xanchor": "center", "yanchor": "bottom",
-            "showarrow": False, "font": {"size": 12, "color": "#7A8297"},
+            "x": 0, "y": 1.03 if mobile else 1.12, "xanchor": "left", "yanchor": "bottom",
+            "showarrow": False, "font": {"size": 9 if mobile else 12, "color": "#7A8297"},
         }],
-        legend={"orientation": "h", "y": 1.16, "x": .5, "xanchor": "center"},
+        legend={"orientation": "h", "y": 1.14 if mobile else 1.16, "x": .56 if mobile else .5, "xanchor": "center", "font": {"size": 9 if mobile else 12}},
         font={
             "family": "Avenir Next, Helvetica Neue, Arial",
             "color": "#4E555A",
-            "size": 12,
+            "size": 9 if mobile else 12,
         },
     )
     return figure
 
 
-def cash_position_chart(data: pd.DataFrame) -> go.Figure:
+def cash_position_chart(data: pd.DataFrame, mobile: bool = False) -> go.Figure:
     """Show the five-year cash and cash equivalents trend."""
     years = pd.to_datetime(data["end"]).dt.year
     year_values = years.tolist()
@@ -198,8 +209,8 @@ def cash_position_chart(data: pd.DataFrame) -> go.Figure:
         hovertemplate="Cash: $%{y:.2f}B<extra></extra>",
     )
     figure.update_layout(
-        height=390,
-        margin={"l": 20, "r": 30, "t": 54, "b": 62},
+        height=285 if mobile else 390,
+        margin={"l": 8, "r": 10, "t": 50, "b": 34} if mobile else {"l": 20, "r": 30, "t": 54, "b": 62},
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -228,27 +239,34 @@ def cash_position_chart(data: pd.DataFrame) -> go.Figure:
             "layer": "below",
             "line": {"color": "#E7E9ED", "width": 1},
         } for tick in [0, 10, 20, 30, 40]],
-        annotations=[{
+        annotations=([{
+            "text": "<b>Cash position</b>",
+            "xref": "paper", "yref": "paper",
+            "x": .5, "y": 1.20,
+            "xanchor": "center", "yanchor": "top",
+            "showarrow": False,
+            "font": {"size": 11, "color": "#182126"},
+        }] if mobile else []) + [{
             "text": "USD billions",
             "xref": "paper",
             "yref": "paper",
             "x": 0,
-            "y": 1.12,
-            "xanchor": "center",
+            "y": 1.04 if mobile else 1.12,
+            "xanchor": "left",
             "yanchor": "bottom",
             "showarrow": False,
-            "font": {"size": 12, "color": "#7A8297"},
+            "font": {"size": 9 if mobile else 12, "color": "#7A8297"},
         }],
         font={
             "family": "Avenir Next, Helvetica Neue, Arial",
             "color": "#4E555A",
-            "size": 12,
+            "size": 9 if mobile else 12,
         },
     )
     return figure
 
 
-def risk_chart(summary: pd.DataFrame) -> go.Figure:
+def risk_chart(summary: pd.DataFrame, mobile: bool = False) -> go.Figure:
     """Create the risk-theme coverage chart."""
     chart_data = summary.sort_values("chunk_count")
     maximum = int(chart_data["chunk_count"].max())
@@ -259,15 +277,17 @@ def risk_chart(summary: pd.DataFrame) -> go.Figure:
         hovertemplate="<b>%{y}</b><br>%{x} filing excerpts<extra></extra>",
     ))
     figure.update_layout(
-        height=330, margin={"l": 28, "r": 82, "t": 4, "b": 38}, bargap=.42, showlegend=False,
+        height=235 if mobile else 330,
+        margin={"l": 4, "r": 46, "t": 14, "b": 14} if mobile else {"l": 28, "r": 82, "t": 4, "b": 38},
+        bargap=.34 if mobile else .42, showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis={"visible": False, "range": [0, maximum * 1.22]},
         yaxis={
             "showgrid": False,
             "automargin": True,
-            "tickfont": {"size": 12, "color": "#525960"},
+            "tickfont": {"size": 9 if mobile else 12, "color": "#525960"},
         },
-        font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 12},
+        font={"family": "Avenir Next, Helvetica Neue, Arial", "color": "#4E555A", "size": 9 if mobile else 12},
     )
     return figure
 
@@ -375,7 +395,7 @@ def render_chat_page() -> None:
                 st.session_state.chat_history = []
                 st.rerun()
 
-            with st.container(height=560, border=False, key="conversation_panel"):
+            with st.container(border=False, key="conversation_panel"):
                 for message_index, message in enumerate(st.session_state.chat_history):
                     render_html(
                         f"""
@@ -401,43 +421,44 @@ def render_chat_page() -> None:
                         """
                     )
         else:
-            with st.container(height=240, border=False, key="conversation_panel"):
+            with st.container(height=125, border=False, key="conversation_empty"):
                 render_html('<div class="chat-ready">Choose a prompt or ask your own question below.</div>')
 
-        with st.container(key="prompt_suggestions"):
-            prompt_left, example_one, example_two, example_three, prompt_right = st.columns([.35, 1, 1, 1, .35], gap="small")
-            examples = [
-                (example_one, "Compare revenue in 2024 and 2025", "Compare Apple's revenue in 2024 and 2025."),
-                (example_two, "Compare assets, liabilities, and cash", "Compare Apple's assets, liabilities, and cash in 2023, 2024, and 2025."),
-                (example_three, "What are Apple’s supply-chain risks?", "What supply chain risks does Apple disclose?"),
-            ]
-            for column, label, example_question in examples:
-                with column:
-                    st.button(
-                        label,
-                        use_container_width=True,
-                        on_click=fill_example_question,
-                        args=(example_question,),
-                        key=f"example_{example_question}",
-                    )
+        with st.container(key="chat_controls"):
+            with st.container(key="prompt_suggestions"):
+                prompt_left, example_one, example_two, example_three, prompt_right = st.columns([.35, 1, 1, 1, .35], gap="small")
+                examples = [
+                    (example_one, "Revenue: 2024 vs 2025", "Compare Apple's revenue in 2024 and 2025."),
+                    (example_two, "Assets, liabilities & cash", "Compare Apple's assets, liabilities, and cash in 2023, 2024, and 2025."),
+                    (example_three, "Supply-chain risks", "What supply chain risks does Apple disclose?"),
+                ]
+                for column, label, example_question in examples:
+                    with column:
+                        st.button(
+                            label,
+                            use_container_width=True,
+                            on_click=fill_example_question,
+                            args=(example_question,),
+                            key=f"example_{example_question}",
+                        )
 
-        with st.container(key="question_composer"):
-            input_column, send_column = st.columns([8, .46], gap="small")
-            with input_column:
-                st.text_input(
-                    "Question",
-                    placeholder="Message Apple Financial Analyst...",
-                    label_visibility="collapsed",
-                    key="qa_input",
-                    on_change=queue_question,
-                )
-            with send_column:
-                st.button(
-                    "↑",
-                    use_container_width=True,
-                    key="send_question",
-                    on_click=queue_question,
-                )
+            with st.container(key="question_composer"):
+                input_column, send_column = st.columns([8, .46], gap="small")
+                with input_column:
+                    st.text_input(
+                        "Question",
+                        placeholder="Message Apple Financial Analyst...",
+                        label_visibility="collapsed",
+                        key="qa_input",
+                        on_change=queue_question,
+                    )
+                with send_column:
+                    st.button(
+                        "↑",
+                        use_container_width=True,
+                        key="send_question",
+                        on_click=queue_question,
+                    )
 
     if pending_question:
         with st.spinner("Reviewing Apple’s financial data and 10-K..."):
@@ -578,9 +599,100 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
 }
 /* Reduce the empty space below conversation history */
 .st-key-chat_workspace .st-key-conversation_panel{
-    margin-bottom:-1.75rem!important;
+    margin-bottom:0!important;
 }
+.st-key-conversation_empty,
+.st-key-conversation_empty>div,
+.st-key-conversation_empty div[data-testid="stVerticalBlock"]{
+    height:220px!important;
+    min-height:220px!important;
+    max-height:220px!important;
+}
+.st-key-conversation_empty .chat-ready{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+    text-align:center!important;
+    height:220px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:0!important;
+}
+.st-key-chat_workspace{
+    width:100%!important;
+    max-width:1180px!important;
+    margin-left:auto!important;
+    margin-right:auto!important;
+}
+.st-key-conversation_panel{
+    max-height:560px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+}
+.st-key-trend_mobile,
+.st-key-profitability_mobile,
+.st-key-balance_mobile,
+.st-key-risk_mobile,
+.mobile-data-table{display:none!important}
 @media(max-width:900px){div[data-testid="stImage"] img{height:220px}.hero-title{font-size:2.55rem;white-space:normal}.takeaway-grid{grid-template-columns:repeat(2,1fr)}.data-status{display:none}.table-shell{overflow-x:auto}.financial-table{min-width:920px}div[data-testid="stSegmentedControl"]{width:100%}}
+@media(max-width:600px){
+    .block-container{padding:2.55rem .8rem 1.75rem!important}
+    .topbar{min-height:36px;padding:.1rem 0 .5rem}.brand{gap:.45rem;font-size:.66rem}.brand-mark{width:27px;height:27px;flex-basis:27px;font-size:.6rem}
+    div[data-testid="stImage"]{margin-top:.55rem}div[data-testid="stImage"] img{height:175px;border-radius:8px}
+    .st-key-active_page{width:100%!important;max-width:310px!important;margin:.55rem auto .05rem!important}.st-key-active_page div[data-testid="stSegmentedControl"]{width:100%!important;max-width:310px!important;margin:0 auto!important}div[data-testid="stSegmentedControl"] button{min-height:32px;padding:.18rem .28rem!important;font-size:.64rem}
+    .hero-copy{margin:.72rem auto 0}.hero-title{font-size:1.72rem;line-height:1.08;letter-spacing:-.045rem;white-space:normal}
+    .section-heading{margin:.78rem auto .5rem}.section-kicker{font-size:1.22rem}.section-title{font-size:1.2rem;letter-spacing:-.018rem;margin-top:.14rem}
+    .year-label{margin:.18rem 0;font-size:.6rem}.st-key-snapshot_year{width:210px!important;margin:0 auto!important}div[data-testid="stSelectbox"] [data-baseweb="select"]>div{min-height:38px;border-radius:9px}
+
+    /* Keep the desktop KPI design, but make the four cards a compact 2-by-2 group. */
+    div[data-testid="stHorizontalBlock"]:has(.metric-card){display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:.55rem!important;row-gap:.7rem!important}
+    div[data-testid="stHorizontalBlock"]:has(.metric-card)>div[data-testid="stColumn"]{width:auto!important;min-width:0!important;margin:0!important;flex:unset!important}
+    .metric-card{box-sizing:border-box;min-height:108px;margin:0!important;padding:.78rem}.metric-label{font-size:.56rem;letter-spacing:.045rem}.metric-value{font-size:1.22rem;margin-top:.42rem}.metric-note{font-size:.6rem;margin-top:.25rem;line-height:1.3}
+
+    div[data-testid="stTabs"] [role="tablist"]{overflow-x:auto!important;overflow-y:hidden!important;justify-content:flex-start!important;scrollbar-width:none}
+    div[data-testid="stTabs"] [role="tablist"]::-webkit-scrollbar{display:none}
+    div[data-testid="stTabs"] button{flex:0 0 auto!important;width:auto!important;min-width:0!important;padding-left:.34rem!important;padding-right:.34rem!important;font-size:.62rem!important}
+    div[data-testid="stTabs"] button p{font-size:.62rem!important;white-space:nowrap!important}
+    .st-key-trend_desktop,.st-key-profitability_desktop,.st-key-balance_desktop,.st-key-risk_desktop,.desktop-data-table{display:none!important}
+    .st-key-trend_mobile,.st-key-profitability_mobile,.st-key-balance_mobile,.st-key-risk_mobile,.mobile-data-table{display:block!important}
+    .st-key-trend_mobile,.st-key-profitability_mobile,.st-key-balance_mobile,.st-key-risk_mobile{margin:0!important}
+    div[data-testid="stPlotlyChart"]{padding:.3rem}
+    div[data-testid="stHorizontalBlock"]:has(.balance-chart-title){row-gap:.45rem!important}
+    .balance-chart-title{position:relative;z-index:3;display:block;line-height:1.4;margin:.2rem 0 .42rem;font-size:.76rem}.st-key-balance_mobile div[data-testid="stMarkdownContainer"]:has(.mobile-cash-title){display:block!important;margin:1.15rem 0 .7rem!important;padding:0!important}.mobile-cash-title{margin:0!important}.balance-note{padding:0 .3rem;font-size:.62rem}
+
+    .takeaway-wrap{margin-top:.65rem;padding:.78rem}.takeaway-header{display:block;padding-bottom:.6rem}.takeaway-title{font-size:.88rem}.takeaway-summary{margin-top:.25rem;font-size:.72rem;line-height:1.4}
+    .takeaway-grid{gap:0;margin-top:.6rem}.takeaway-item{min-height:76px;padding:.55rem .62rem;border-left:1px solid var(--line);border-top:1px solid var(--line)}
+    .takeaway-item:first-child{padding:.55rem .62rem;border-top:0;border-left:0}.takeaway-item:nth-child(2){border-top:0}.takeaway-item:nth-child(3){border-left:0}
+    .takeaway-value{font-size:1.08rem}.takeaway-label{font-size:.63rem;line-height:1.3}
+
+    .risk-label{margin:.2rem 0 .4rem;font-size:.64rem}.risk-summary{height:36px;margin-bottom:.3rem;padding:0 .75rem;font-size:.7rem}.st-key-risk_mobile div[data-testid="stPlotlyChart"]{padding:.35rem .25rem}.risk-note{margin:.3rem 0 .65rem;font-size:.64rem}.risk-detail{height:290px;min-height:0;padding:.9rem}.risk-detail-title{font-size:.86rem}.risk-detail-text{overflow-y:auto;font-size:.72rem;line-height:1.5}.risk-source{font-size:.62rem;margin-top:.55rem;padding-top:.55rem}
+    .table-shell{overflow:hidden}.financial-table{min-width:0!important;font-size:.61rem;table-layout:fixed}.financial-table th,.financial-table td{padding:.48rem .18rem;white-space:normal;line-height:1.2}.financial-table th:first-child,.financial-table td:first-child{width:31%;text-align:left!important;padding-left:.48rem}.financial-table th:not(:first-child),.financial-table td:not(:first-child){width:13.8%}
+    .footer{margin-top:1.8rem;font-size:.65rem}
+
+    .chat-page-heading{width:100%;margin:.8rem auto .55rem}.chat-heading-lockup{gap:.5rem}.chat-page-title{font-size:1.55rem;line-height:1.1;letter-spacing:-.035rem;white-space:normal}.chat-page-description{margin:.35rem auto 0;font-size:.69rem;line-height:1.4}.chat-bot-icon{width:2.6rem;height:2.6rem;flex-basis:2.6rem}
+    .st-key-chat_workspace{width:100%!important;max-width:none!important;margin:0 auto!important;padding:0!important;background:linear-gradient(180deg,#FAFAFD 0%,#F7F8FC 100%)!important;border:1px solid #E1E3EC!important;border-radius:14px!important;box-shadow:0 6px 18px rgba(29,34,55,.045)!important}.st-key-chat_workspace>div{padding:.62rem!important}
+    .st-key-chat_workspace>div>div[data-testid="stVerticalBlock"]{gap:.35rem!important}
+    .st-key-conversation_empty,.st-key-conversation_empty>div,.st-key-conversation_empty div[data-testid="stVerticalBlock"]{height:105px!important;min-height:105px!important;max-height:105px!important;margin-bottom:0!important}.st-key-conversation_empty{background:#F4F7FA!important;border:1px solid #E4E8EF!important;border-radius:11px!important}.st-key-conversation_empty .chat-ready{margin:0!important;height:105px;display:flex;align-items:center;justify-content:center;padding:0 .8rem;font-size:.66rem;line-height:1.35}
+    .st-key-chat_workspace div[data-testid="stHorizontalBlock"]:has(.conversation-label){display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:.4rem!important}
+    .st-key-chat_workspace div[data-testid="stHorizontalBlock"]:has(.conversation-label)>div[data-testid="stColumn"]:first-child{width:auto!important;min-width:0!important;flex:1 1 auto!important}
+    .st-key-chat_workspace div[data-testid="stHorizontalBlock"]:has(.conversation-label)>div[data-testid="stColumn"]:last-child{width:52px!important;min-width:52px!important;flex:0 0 52px!important}
+    .st-key-chat_workspace .conversation-label{height:28px!important;font-size:.6rem!important}
+    .st-key-chat_workspace div[data-testid="stHorizontalBlock"]:has(.conversation-label) div[data-testid="stButton"] button{width:52px!important;min-height:28px!important;height:28px!important;padding:.1rem .35rem!important;font-size:.58rem!important;border-radius:8px!important}
+    .st-key-conversation_panel,.st-key-conversation_panel>div,.st-key-conversation_panel div[data-testid="stVerticalBlock"],.st-key-conversation_panel div[data-testid="stVerticalBlockBorderWrapper"]{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}
+    .st-key-conversation_panel{margin-bottom:0!important}
+    .st-key-chat_workspace .st-key-prompt_suggestions{width:100%!important;margin:.45rem auto 0!important;transform:none;overflow:hidden!important}
+    .st-key-chat_controls{width:100%!important;margin:.35rem 0 0!important}
+        .st-key-chat_controls>div[data-testid="stVerticalBlock"],
+        .st-key-chat_controls>div>div[data-testid="stVerticalBlock"]{gap:.5rem!important}
+    .st-key-chat_controls .st-key-prompt_suggestions,.st-key-chat_controls .st-key-question_composer{margin:0!important}
+    .st-key-prompt_suggestions div[data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:.42rem!important;width:100%!important;min-width:0!important}
+    .st-key-prompt_suggestions div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:unset!important}.st-key-prompt_suggestions div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]:not(:has(button)){display:none!important}
+    .st-key-prompt_suggestions div[data-testid="stButton"] button{width:100%!important;min-height:27px!important;height:27px!important;padding:.18rem .25rem!important;white-space:nowrap!important;font-size:.53rem!important}
+    .st-key-prompt_suggestions div[data-testid="stButton"] button p{font-size:.56rem!important;line-height:1!important;white-space:nowrap!important}
+    .st-key-question_composer{width:100%!important;margin:.3rem 0 .1rem!important}.st-key-question_composer div[data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:minmax(0,1fr) 38px!important;gap:.38rem!important;align-items:center!important}.st-key-question_composer div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:unset!important}.st-key-question_composer div[data-testid="stTextInput"] div[data-baseweb="input"],.st-key-question_composer div[data-testid="stTextInput"] input{height:38px!important;min-height:38px!important;font-size:.72rem!important}.st-key-question_composer div[data-testid="stButton"] button{width:38px!important;height:38px!important;min-height:38px!important;margin:0!important;border-radius:11px!important}
+    .st-key-conversation_panel .conversation-turn{padding:.8rem .45rem}.st-key-conversation_panel .chat-user-bubble{max-width:88%;padding:.52rem .68rem;font-size:.76rem;line-height:1.42}.chat-assistant-row{grid-template-columns:30px minmax(0,1fr);gap:.5rem}.chat-avatar{width:30px;height:30px;border-radius:10px}.chat-avatar svg{width:20px;height:20px}.chat-answer{font-size:.8rem;line-height:1.58}.chat-name{font-size:.7rem;margin-bottom:.32rem}.answer-heading{font-size:.78rem}.answer-line,.answer-bullet{line-height:1.5}.answer-year{font-size:.66rem}.answer-source,.answer-citation,.answer-source-link a{font-size:.64rem}
+}
 </style>
 """)
 
@@ -636,7 +748,10 @@ metrics = [
 ]
 for column, (label, value, note) in zip(st.columns(4), metrics):
     with column:
-        render_html(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-note">{note}</div></div>')
+        render_html(
+            f'<div class="metric-card"><div class="metric-label">{label}</div>'
+            f'<div class="metric-value">{value}</div><div class="metric-note">{note}</div></div>'
+        )
 
 
 # Analysis.
@@ -647,7 +762,10 @@ trend_tab, profitability_tab, balance_sheet_tab, data_tab = st.tabs(
     ["Financial trends", "Profitability", "Balance sheet", "Underlying data"]
 )
 with trend_tab:
-    st.plotly_chart(trend_chart(data), use_container_width=True, config={"displayModeBar": False})
+    with st.container(key="trend_desktop"):
+        st.plotly_chart(trend_chart(data), use_container_width=True, config={"displayModeBar": False})
+    with st.container(key="trend_mobile"):
+        st.plotly_chart(trend_chart(data, mobile=True), use_container_width=True, config={"displayModeBar": False})
     render_html(f"""
     <div class="takeaway-wrap"><div class="takeaway-header"><div class="takeaway-title">Key Takeaways</div><div class="takeaway-summary">Growth strengthened in FY{latest_year}, while cash generation softened.</div></div>
     <div class="takeaway-grid"><div class="takeaway-item"><div class="takeaway-value positive">{latest['revenue_growth_pct']:+.2f}%</div><div class="takeaway-label">Latest annual revenue growth</div></div>
@@ -656,20 +774,35 @@ with trend_tab:
     <div class="takeaway-item"><div class="takeaway-value negative">{cash_flow_growth:+.2f}%</div><div class="takeaway-label">Annual operating-cash-flow change</div></div></div></div>
     """)
 with profitability_tab:
-    st.plotly_chart(margin_chart(data), use_container_width=True, config={"displayModeBar": False})
+    with st.container(key="profitability_desktop"):
+        st.plotly_chart(margin_chart(data), use_container_width=True, config={"displayModeBar": False})
+    with st.container(key="profitability_mobile"):
+        st.plotly_chart(margin_chart(data, mobile=True), use_container_width=True, config={"displayModeBar": False})
 with balance_sheet_tab:
-    balance_left, balance_right = st.columns(2, gap="large")
-    with balance_left:
-        render_html('<div class="balance-chart-title">Assets and liabilities</div>')
+    with st.container(key="balance_desktop"):
+        balance_left, balance_right = st.columns(2, gap="large")
+        with balance_left:
+            render_html('<div class="balance-chart-title">Assets and liabilities</div>')
+            st.plotly_chart(
+                assets_liabilities_chart(data),
+                use_container_width=True,
+                config={"displayModeBar": False},
+            )
+        with balance_right:
+            render_html('<div class="balance-chart-title">Cash position</div>')
+            st.plotly_chart(
+                cash_position_chart(data),
+                use_container_width=True,
+                config={"displayModeBar": False},
+            )
+    with st.container(key="balance_mobile"):
         st.plotly_chart(
-            assets_liabilities_chart(data),
+            assets_liabilities_chart(data, mobile=True),
             use_container_width=True,
             config={"displayModeBar": False},
         )
-    with balance_right:
-        render_html('<div class="balance-chart-title">Cash position</div>')
         st.plotly_chart(
-            cash_position_chart(data),
+            cash_position_chart(data, mobile=True),
             use_container_width=True,
             config={"displayModeBar": False},
         )
@@ -682,7 +815,22 @@ with data_tab:
     table["Fiscal Year"] = pd.to_datetime(table["end"]).dt.year
     table = table[["Fiscal Year", "revenue_billions", "operating_income_billions", "net_income_billions", "operating_cash_flow_billions", "total_assets_billions", "total_liabilities_billions", "cash_and_cash_equivalents_billions", "operating_margin_pct", "net_profit_margin_pct", "revenue_growth_pct"]]
     table.columns = ["Fiscal Year", "Revenue ($B)", "Operating Income ($B)", "Net Income ($B)", "Operating Cash Flow ($B)", "Total Assets ($B)", "Total Liabilities ($B)", "Cash ($B)", "Operating Margin (%)", "Net Margin (%)", "Revenue Growth (%)"]
-    render_html(f'<div class="table-shell">{table.round(2).to_html(index=False, classes="financial-table", border=0, na_rep="—")}</div>')
+    mobile_table = table.set_index("Fiscal Year").transpose().reset_index()
+    mobile_table.columns = ["Metric"] + [f"FY{year}" for year in table["Fiscal Year"]]
+    mobile_table["Metric"] = [
+        "Revenue ($B)", "Operating income ($B)", "Net income ($B)",
+        "Operating cash flow ($B)", "Total assets ($B)",
+        "Total liabilities ($B)", "Cash ($B)", "Operating margin (%)",
+        "Net margin (%)", "Revenue growth (%)",
+    ]
+    render_html(
+        f'<div class="desktop-data-table"><div class="table-shell">'
+        f'{table.round(2).to_html(index=False, classes="financial-table", border=0, na_rep="—")}'
+        '</div></div>'
+        f'<div class="mobile-data-table"><div class="table-shell mobile-table-shell">'
+        f'{mobile_table.round(2).to_html(index=False, classes="financial-table mobile-financial-table", border=0, na_rep="—")}'
+        '</div></div>'
+    )
 
 
 # Risk analysis.
@@ -693,22 +841,26 @@ left, right = st.columns(2, gap="large")
 with left:
     render_html('<div class="risk-label">Theme coverage</div>')
     render_html(f'<div class="risk-summary"><span><strong>{len(risk_chunks)}</strong> filing excerpts</span><span><strong>{len(risk_summary)}</strong> themes</span></div>')
+    with st.container(key="risk_desktop"):
+        st.plotly_chart(
+            risk_chart(risk_summary),
+            use_container_width=True,
+            config={"displayModeBar": False},
+            key="risk_coverage_chart_desktop",
+        )
+    with st.container(key="risk_mobile"):
+        st.plotly_chart(
+            risk_chart(risk_summary, mobile=True),
+            use_container_width=True,
+            config={"displayModeBar": False},
+            key="risk_coverage_chart_mobile",
+        )
+    render_html('<div class="risk-note">Bars show filing excerpt coverage, not risk severity.</div>')
 with right:
     render_html('<div class="risk-label">Explore a theme</div>')
     selected_topic = st.selectbox("Risk theme", risk_summary["topic_label"].tolist(), label_visibility="collapsed", key="risk_topic")
-
-topic_rows = risk_chunks[risk_chunks["topic_label"] == selected_topic].sort_values("topic_score", ascending=False)
-excerpt = str(topic_rows.iloc[0]["text"]).strip()
-left, right = st.columns(2, gap="large")
-with left:
-    st.plotly_chart(
-        risk_chart(risk_summary),
-        use_container_width=True,
-        config={"displayModeBar": False},
-        key="risk_coverage_chart",
-    )
-    render_html('<div class="risk-note">Bars show filing excerpt coverage, not risk severity.</div>')
-with right:
+    topic_rows = risk_chunks[risk_chunks["topic_label"] == selected_topic].sort_values("topic_score", ascending=False)
+    excerpt = str(topic_rows.iloc[0]["text"]).strip()
     render_html(f'<div class="risk-detail"><div class="risk-detail-title">{escape(selected_topic)}</div><div class="risk-detail-text">{escape(excerpt)}</div><div class="risk-source">Source: Apple FY{latest_year} Form 10-K · Item 1A</div></div>')
 
 
