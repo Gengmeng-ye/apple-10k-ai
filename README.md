@@ -1,266 +1,276 @@
-# Apple 10-K AI Financial Analyst
+# Apple 10-K Financial Analyst
 
-An end-to-end financial analytics application that combines data engineering, data analysis, data science, and retrieval-augmented generation to analyze Apple’s SEC filings.
+An end-to-end SEC analytics application that transforms Apple filings into an interactive financial dashboard and evidence-grounded question-answering experience.
 
-## Project Goal
+![Apple 10-K Financial Analyst dashboard hero](assets/apple_energy_hero.png)
 
-Public-company filings contain valuable financial and risk information, but they are often long and difficult to analyze efficiently.
+## Overview
 
-This project builds a reproducible SEC data pipeline, analyzes Apple’s financial performance, identifies major risk themes from 10-K filings, and answers financial questions with supporting source evidence.
+Apple 10-K Financial Analyst combines data engineering, financial analysis, natural-language retrieval, and responsive data visualization in one Streamlit application. It uses official SEC filings and Company Facts data to help users explore Apple’s financial performance, compare fiscal years, review balance-sheet trends, and investigate management commentary and disclosed risks.
 
-## Planned Features
+The application currently covers Apple fiscal years 2021–2025 and is designed for both desktop and mobile screens.
 
-- Extract structured financial data from the SEC EDGAR API
-- Build a reproducible ETL pipeline
-- Validate and store processed data in Parquet and DuckDB
-- Analyze revenue, operating income, net income, operating cash flow, and operating margin
-- Visualize three-year financial trends
-- Extract Risk Factors from Apple’s 10-K filings
-- Identify risk themes using TF-IDF and K-Means clustering
-- Evaluate clustering results using silhouette scores and manual review
-- Answer questions from 10-K filings using retrieval-augmented generation
-- Display supporting source evidence with each answer
+## Key Features
 
-## Project Architecture
+### Interactive financial dashboard
 
-### Financial Data Pipeline
+- Fiscal-year selector with KPI cards for revenue, operating income, net income, and operating cash flow
+- Five-year financial trends for FY2021–FY2025
+- Profitability analysis using operating margin and net profit margin
+- Balance-sheet analysis for total assets, total liabilities, and cash and cash equivalents
+- Responsive desktop, tablet, and mobile layouts
+- Underlying financial data table for transparent review
 
-```text
-SEC Company Facts API
-        ↓
-Raw JSON
-        ↓
-Data Transformation
-        ↓
-Data Quality Validation
-        ↓
-Parquet
-        ↓
-DuckDB
-        ↓
-SQL Analysis
-        ↓
-Streamlit Dashboard
-```
+### Evidence-grounded financial assistant
 
-### Risk Topic Modeling
+- Deterministic DuckDB answers for reported financial values and comparisons
+- Single-year, multi-year, trend, and multi-metric queries
+- Automatic calculations for absolute change, percentage change, and percentage-point change
+- MD&A retrieval for questions asking why a financial result changed
+- Risk Factors retrieval for questions about Apple’s disclosed business risks
+- Direct links and structured citations back to Apple’s SEC filing
+- Clear rejection of questions outside the supported financial and filing scope
 
-```text
-Apple 10-K Filings
-        ↓
-Risk Factor Extraction
-        ↓
-Text Preprocessing
-        ↓
-TF-IDF Feature Engineering
-        ↓
-K-Means Clustering
-        ↓
-Model Evaluation
-        ↓
-Risk Topic Analysis
-```
+### Risk analysis
 
-### RAG Question Answering
+- Extraction of Item 1A, Risk Factors, from Apple’s Form 10-K
+- Sentence-based chunking of filing text
+- TF-IDF feature engineering and NMF topic modeling
+- Six interpretable risk themes:
+  - Legal and Regulatory
+  - Products and Competition
+  - Trade and Supply Chain
+  - Credit and Financial Risk
+  - Cybersecurity and Data Privacy
+  - Foreign Exchange
+- Interactive theme coverage chart and filing excerpts
+
+## Supported Financial Metrics
+
+| Category | Metrics |
+| --- | --- |
+| Income statement | Revenue, operating income, net income |
+| Cash flow | Operating cash flow |
+| Balance sheet | Total assets, total liabilities, cash and cash equivalents |
+| Profitability | Operating margin, net profit margin |
+| Growth | Revenue growth, five-year revenue CAGR |
+
+Financial figures are presented in USD billions. Margins and growth rates are presented as percentages.
+
+## Example Questions
 
 ```text
-User Question
-        ↓
-Search Apple 10-K Filings
-        ↓
-Retrieve Relevant Evidence
-        ↓
-Generate an Evidence-Based Answer
-        ↓
-Display Answer and Source Evidence
+What were Apple's total assets in 2025?
+Compare Apple's revenue in 2024 and 2025.
+Compare Apple's assets, liabilities, and cash in 2023, 2024, and 2025.
+Show Apple's cash position over the past five years.
+Why did Apple's revenue change in 2025?
+What supply-chain risks does Apple disclose?
 ```
+
+Reported-value questions are answered deterministically from DuckDB. Questions requiring management explanation or risk synthesis use retrieved SEC evidence with the OpenAI API.
+
+## OpenAI Integration
+
+The application uses the OpenAI API selectively rather than sending every question to a language model:
+
+- Reported financial values, year comparisons, and trend calculations are generated deterministically from DuckDB and Python without an OpenAI call.
+- Questions asking why a financial result changed retrieve relevant Item 7 MD&A evidence before OpenAI produces a concise, cited explanation.
+- Risk questions retrieve relevant Item 1A Risk Factors excerpts before OpenAI synthesizes an evidence-grounded answer.
+- The model is instructed to use only the supplied SEC evidence, preserve the distinction between reported results and management commentary, and state when the evidence is insufficient.
+
+This design limits unnecessary API usage while keeping numerical answers reproducible and narrative answers grounded in SEC disclosures.
+
+## Architecture
+
+```text
+SEC Company Facts API ──> Financial transformation ──> Validation
+                                                        │
+                                                        v
+                                              Parquet + DuckDB
+                                                        │
+                                                        v
+                                                Financial Q&A
+
+Apple Form 10-K ──> Item 7 MD&A extraction ──> TF-IDF retrieval ──┐
+                                                                  ├─> Cited answers
+Apple Form 10-K ──> Item 1A extraction ──> NMF topics + retrieval ─┘
+
+Parquet + DuckDB + processed filing chunks ──> Streamlit dashboard
+```
+
+### Question routing
+
+1. The question is classified as financial, risk-related, or unsupported.
+2. Financial metrics and requested fiscal years are identified.
+3. Reported values are queried from the local DuckDB warehouse.
+4. Explanation questions retrieve relevant MD&A chunks.
+5. Risk questions retrieve relevant Item 1A chunks.
+6. The response includes SEC-grounded citations and a filing link.
+
+## Data Pipeline
+
+`run_pipeline.py` executes the main financial and risk workflow:
+
+1. Transform SEC Company Facts into an annual financial summary.
+2. Load the curated dataset into DuckDB.
+3. Validate required columns, data types, missing values, and value ranges.
+4. Extract Risk Factors from Apple’s latest Form 10-K.
+5. Build and label the NMF risk-topic model.
+
+MD&A extraction and chunk preparation are handled by `src/extract_mda.py` and `src/prepare_mda_chunks.py`.
 
 ## Technology Stack
 
-- Python 3.12.13
-- SEC EDGAR API
-- pandas and PyArrow
-- DuckDB and SQL
-- Streamlit and Plotly
-- scikit-learn
-- OpenAI API and File Search
-- pytest
-- Git and GitHub
+- **Application:** Streamlit
+- **Visualization:** Plotly
+- **Data processing:** Python, pandas, PyArrow
+- **Analytics warehouse:** DuckDB and SQL
+- **SEC ingestion:** Requests, Beautiful Soup, lxml
+- **Text retrieval and modeling:** scikit-learn, TF-IDF, cosine similarity, NMF
+- **Grounded response generation:** OpenAI API
+- **Testing:** pytest
+- **Version control:** Git and GitHub
 
 ## Project Structure
 
 ```text
 apple-10k-ai/
 ├── app.py
-├── financial_analysis.py
 ├── rag_service.py
+├── financial_analysis.py
 ├── run_pipeline.py
-├── src/
-│   ├── __init__.py
-│   ├── extract_sec_data.py
-│   ├── transform_financials.py
-│   ├── validate_data.py
-│   ├── load_warehouse.py
-│   ├── extract_risk_factors.py
-│   └── model_risk_topics.py
+├── requirements.txt
+├── assets/
+│   └── apple_energy_hero.png
 ├── data/
 │   ├── filings/
 │   ├── raw/
 │   └── processed/
-├── warehouse/
-├── models/
-├── outputs/
-├── logs/
-├── assets/
+│       ├── apple_financial_summary.parquet
+│       ├── apple_mda_chunks.json
+│       └── apple_risk_chunks.json
+├── src/
+│   ├── extract_sec_data.py
+│   ├── transform_financials.py
+│   ├── load_warehouse.py
+│   ├── validate_data.py
+│   ├── extract_mda.py
+│   ├── prepare_mda_chunks.py
+│   ├── extract_risk_factors.py
+│   └── model_risk_topics.py
 ├── tests/
-├── .env.example
-├── .gitignore
-├── requirements.txt
-├── requirements-lock.txt
-└── README.md
+│   ├── test_validate_data.py
+│   ├── test_model_risk_topics.py
+│   └── test_rag_routing_and_citations.py
+└── warehouse/
+    └── apple_finance.duckdb
 ```
 
-## Core Financial Metrics
+## Local Setup
 
-The first version of the project focuses on five financial metrics:
+### 1. Clone the repository
 
-- Revenue / Net Sales
-- Operating Income
-- Net Income
-- Operating Cash Flow
-- Operating Margin
-
-Operating margin is calculated as:
-
-```text
-Operating Margin = Operating Income / Revenue × 100%
+```bash
+git clone --branch feature/mda-analysis https://github.com/Gengmeng-ye/apple-10k-ai.git
+cd apple-10k-ai
 ```
 
-Revenue growth is calculated as:
-
-```text
-Revenue Growth = (Current Revenue / Previous Revenue - 1) × 100%
-```
-
-## Data Engineering Design
-
-The project follows a layered data architecture:
-
-- `data/raw`: unchanged responses retrieved from the SEC API
-- `data/processed`: cleaned and standardized Parquet data
-- `warehouse`: curated financial data stored in DuckDB
-- `logs`: pipeline execution and validation records
-
-The pipeline is designed to be:
-
-- Reproducible
-- Traceable
-- Idempotent
-- Validated before loading
-- Safe to rerun without creating duplicate records
-
-## Data Science Design
-
-Risk paragraphs from Apple’s 10-K filings will be converted into numerical features using TF-IDF.
-
-K-Means will group similar risk paragraphs into topics. The number of clusters will be selected using silhouette scores together with manual interpretation.
-
-Truncated SVD will be used to visualize the high-dimensional text features in two dimensions.
-
-Because the project only covers three fiscal years, it will not use those three observations to make unreliable stock-price or revenue forecasts.
-
-## RAG Design
-
-The RAG component will retrieve relevant evidence from Apple’s 10-K filings before generating an answer.
-
-The application will:
-
-- Answer only from the provided SEC filings
-- Display the filing used as evidence
-- Show retrieved excerpts when available
-- Avoid inventing page numbers or unsupported citations
-- State clearly when the available evidence is insufficient
-
-## Current Status
-
-- [x] Project scope defined
-- [x] Python 3.12 environment created
-- [x] Project folder structure initialized
-- [x] Core dependencies installed and tested
-- [x] Git repository initialized
-- [x] Environment files protected
-- [ ] SEC data extraction
-- [ ] Financial data transformation
-- [ ] Data quality validation
-- [ ] DuckDB loading
-- [ ] Financial dashboard
-- [ ] RAG question answering
-- [ ] Risk Factor extraction
-- [ ] Risk topic modeling
-- [ ] Full-pipeline testing and evaluation
-
-## Data Source
-
-Financial data and company filings will be obtained from the U.S. Securities and Exchange Commission’s EDGAR system.
-
-Apple’s Central Index Key (CIK) is:
-
-```text
-0000320193
-```
-
-## Environment Setup
-
-Create and activate the project environment:
+### 2. Create the Python environment
 
 ```bash
 conda create -n apple10k python=3.12 -y
 conda activate apple10k
-```
-
-Install the project dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-## Environment Variables
+### 3. Configure environment variables
 
-Copy `.env.example` to `.env` and provide the required values:
+Create a `.env` file in the project root:
 
 ```text
-OPENAI_API_KEY=
-OPENAI_VECTOR_STORE_ID=
 SEC_USER_AGENT=Your Name your.email@example.com
+OPENAI_API_KEY=your_openai_api_key
 ```
 
-Do not commit the real `.env` file to GitHub.
+The SEC requests an identifiable user agent. The OpenAI API key is required for MD&A explanations and synthesized Risk Factors answers. Do not commit the `.env` file.
 
-## Planned Usage
+### 4. Launch the application
 
-Run the financial data pipeline:
-
-```bash
-python run_pipeline.py
-```
-
-Launch the application:
+The repository includes lightweight processed data and a DuckDB database for the deployed application:
 
 ```bash
 streamlit run app.py
 ```
 
-These commands will become functional as the corresponding components are implemented.
+To rebuild the financial and risk datasets from locally downloaded SEC source files:
+
+```bash
+python run_pipeline.py
+```
+
+## Testing
+
+Run the automated test suite:
+
+```bash
+python -m pytest -q
+```
+
+The current suite contains 19 passing tests covering:
+
+- Financial-data validation
+- Risk-topic processing
+- Question classification and routing
+- Financial metric aliases
+- MD&A retrieval decisions
+- Citation and answer-format behavior
+
+Additional checks used before deployment:
+
+```bash
+python -m py_compile app.py rag_service.py
+git diff --check
+```
+
+## Data Sources
+
+- [SEC Company Facts API](https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json)
+- [Apple FY2025 Form 10-K](https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm)
+
+Apple’s Central Index Key is `0000320193`.
+
+## Design Decisions
+
+- Financial values are queried locally instead of generated by a language model.
+- OpenAI is used only when a question requires narrative synthesis from retrieved filing evidence.
+- Cash is visualized separately because its scale is substantially smaller than total assets and liabilities.
+- Lightweight processed assets are included so the application can start in a hosted environment without rebuilding the full SEC pipeline.
+- Raw filings, secrets, caches, logs, and large generated artifacts remain excluded from version control.
 
 ## Limitations
 
-- The initial version supports only Apple
-- Financial analysis covers FY2023–FY2025
-- Risk-topic clusters require human interpretation
-- RAG answers depend on the quality of retrieved evidence
-- The application does not provide investment recommendations
-- The current version does not predict stock prices or future financial results
+- The application currently supports Apple only.
+- Annual financial analysis covers FY2021–FY2025; it does not yet include quarterly 10-Q data.
+- Risk-theme coverage represents the number of filing excerpts, not risk severity.
+- Retrieved filing evidence may not explain every financial change; the assistant does not speculate when support is insufficient.
+- The project does not forecast Apple’s stock price or future financial results.
+- The application is intended for analysis and education, not investment decision-making.
+
+## Future Improvements
+
+- Add Microsoft and Alphabet for peer comparison
+- Add quarterly 10-Q ingestion and analysis
+- Add hybrid retrieval across Risk Factors, MD&A, and financial statements for questions connecting disclosed risks with realized financial impacts
+- Add retrieval evaluation metrics and broader question test cases
+- Automate SEC data refreshes for future filings
 
 ## Disclaimer
 
-This project is for educational and portfolio purposes only. It does not constitute financial or investment advice.
+This project is for educational and portfolio demonstration purposes only. It does not constitute financial or investment advice.
+
+## Author
+
+**Gengmeng Ye**
+
+MS in Business Analytics, USC Marshall School of Business
