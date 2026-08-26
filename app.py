@@ -507,6 +507,8 @@ cash_flow_growth = (latest["operating_cash_flow_billions"] / previous["operating
 render_html("""
 <style>
 :root{--ink:#182126;--soft:#676D71;--line:#D9DAE7;--primary:#5B63C9;--dark:#41488F;--positive:#2E9D78;--negative:#E05A5A}
+.stAppDeployButton,[data-testid="stToolbar"],[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],#MainMenu,footer{display:none!important;visibility:hidden!important}
 .stApp{background:#FFF;color:var(--ink);font-family:"Avenir Next","Helvetica Neue",Arial,sans-serif}.block-container{max-width:1220px;padding-top:3.75rem!important;padding-bottom:3rem}
 .topbar{min-height:48px;display:flex;align-items:center;justify-content:space-between;padding:.35rem 0 .8rem;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:.75rem;font-size:.8rem;font-weight:650;line-height:1.25}.brand-mark{width:34px;height:34px;flex:0 0 34px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #B9B7B1;border-radius:50%;font-size:.7rem;font-weight:700}.data-status{color:var(--soft);font-size:.78rem;line-height:1.25}
 div[data-testid="stRadio"]{width:440px;margin:1.1rem auto .2rem}div[data-testid="stRadio"]>label{display:none!important}div[data-testid="stRadio"] div[role="radiogroup"]{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#F1F2F6;border:1px solid #E1E3EB;border-radius:11px}div[data-testid="stRadio"] div[role="radiogroup"]>label{min-height:38px;display:flex!important;align-items:center;justify-content:center;padding:.42rem .85rem!important;background:transparent;border:0;border-radius:8px;color:#666C72;font-size:.82rem;font-weight:620;cursor:pointer}div[data-testid="stRadio"] div[role="radiogroup"]>label:has(input:checked){background:#FFF;color:var(--dark);box-shadow:0 2px 8px rgba(37,42,65,.10)}div[data-testid="stRadio"] div[role="radiogroup"]>label>div:first-child{display:none!important}
@@ -677,6 +679,10 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
     .st-key-trend_desktop,.st-key-profitability_desktop,.st-key-balance_desktop,.st-key-risk_desktop,.desktop-data-table{display:none!important}
     .st-key-trend_mobile,.st-key-profitability_mobile,.st-key-balance_mobile,.st-key-risk_mobile,.mobile-data-table{display:block!important}
     .st-key-trend_mobile,.st-key-profitability_mobile,.st-key-balance_mobile,.st-key-risk_mobile{margin:0!important}
+    .st-key-trend_mobile div[data-testid="stPlotlyChart"],
+    .st-key-profitability_mobile div[data-testid="stPlotlyChart"],
+    .st-key-balance_mobile div[data-testid="stPlotlyChart"],
+    .st-key-risk_mobile div[data-testid="stPlotlyChart"]{touch-action:pan-y!important}
     div[data-testid="stPlotlyChart"]{padding:.3rem}
     div[data-testid="stHorizontalBlock"]:has(.balance-chart-title){row-gap:.45rem!important}
     .balance-chart-title{position:relative;z-index:3;display:block;line-height:1.4;margin:.2rem 0 .42rem;font-size:.76rem}.st-key-balance_mobile div[data-testid="stMarkdownContainer"]:has(.mobile-cash-title){display:block!important;margin:1.15rem 0 .7rem!important;padding:0!important}.mobile-cash-title{margin:0!important}.balance-note{padding:0 .3rem;font-size:.62rem}
@@ -787,7 +793,7 @@ with trend_tab:
     with st.container(key="trend_desktop"):
         st.plotly_chart(trend_chart(data), use_container_width=True, config={"displayModeBar": False})
     with st.container(key="trend_mobile"):
-        st.plotly_chart(trend_chart(data, mobile=True), use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(trend_chart(data, mobile=True), use_container_width=True, config={"displayModeBar": False, "staticPlot": True, "responsive": True})
     render_html(f"""
     <div class="takeaway-wrap"><div class="takeaway-header"><div class="takeaway-title">Key Takeaways</div><div class="takeaway-summary">Growth strengthened in FY{latest_year}, while cash generation softened.</div></div>
     <div class="takeaway-grid"><div class="takeaway-item"><div class="takeaway-value positive">{latest['revenue_growth_pct']:+.2f}%</div><div class="takeaway-label">Latest annual revenue growth</div></div>
@@ -799,7 +805,7 @@ with profitability_tab:
     with st.container(key="profitability_desktop"):
         st.plotly_chart(margin_chart(data), use_container_width=True, config={"displayModeBar": False})
     with st.container(key="profitability_mobile"):
-        st.plotly_chart(margin_chart(data, mobile=True), use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(margin_chart(data, mobile=True), use_container_width=True, config={"displayModeBar": False, "staticPlot": True, "responsive": True})
 with balance_sheet_tab:
     with st.container(key="balance_desktop"):
         balance_left, balance_right = st.columns(2, gap="large")
@@ -821,12 +827,12 @@ with balance_sheet_tab:
         st.plotly_chart(
             assets_liabilities_chart(data, mobile=True),
             use_container_width=True,
-            config={"displayModeBar": False},
+            config={"displayModeBar": False, "staticPlot": True, "responsive": True},
         )
         st.plotly_chart(
             cash_position_chart(data, mobile=True),
             use_container_width=True,
-            config={"displayModeBar": False},
+            config={"displayModeBar": False, "staticPlot": True, "responsive": True},
         )
     render_html(
         '<div class="balance-note">Cash is shown separately because its scale is '
@@ -874,7 +880,7 @@ with left:
         st.plotly_chart(
             risk_chart(risk_summary, mobile=True),
             use_container_width=True,
-            config={"displayModeBar": False},
+            config={"displayModeBar": False, "staticPlot": True, "responsive": True},
             key="risk_coverage_chart_mobile",
         )
     render_html('<div class="risk-note">Bars show filing excerpt coverage, not risk severity.</div>')
