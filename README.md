@@ -233,12 +233,44 @@ python -m py_compile app.py rag_service.py
 git diff --check
 ```
 
-## Data Sources
+## Data Sources and Provenance
 
-- [SEC Company Facts API](https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json)
-- [Apple FY2025 Form 10-K](https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm)
+All reported financial figures and narrative evidence in the application come from official U.S. Securities and Exchange Commission sources. The project does not use third-party financial estimates, forecasts, or market-data providers.
 
-Apple’s Central Index Key is `0000320193`.
+| Source | How it is used |
+| --- | --- |
+| [SEC Company Facts API](https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json) | Structured XBRL facts used to build Apple’s FY2021–FY2025 annual financial dataset |
+| [Apple FY2025 Form 10-K](https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm) | Item 7 MD&A, Item 1A Risk Factors, filing metadata, evidence excerpts, and answer citations |
+
+Apple’s Central Index Key is `0000320193`. The FY2025 Form 10-K covers the fiscal year ended September 27, 2025, and was filed on October 31, 2025.
+
+### SEC data ingestion
+
+The project retrieves SEC data through two ingestion paths:
+
+1. **Structured financial data**  
+   `src/extract_sec_data.py` sends an HTTP request to the SEC Company Facts API using an identifiable `SEC_USER_AGENT`. The response is saved locally as raw JSON before transformation.
+
+2. **Narrative filing data**  
+   The same ingestion module identifies Apple’s latest Form 10-K from SEC filing metadata and downloads the filing’s primary HTML document from EDGAR.
+
+The downloaded Form 10-K is parsed with Beautiful Soup:
+
+- `src/extract_mda.py` extracts Item 7, Management’s Discussion and Analysis.
+- `src/extract_risk_factors.py` extracts Item 1A, Risk Factors.
+- The extracted sections are normalized and divided into retrieval-ready chunks.
+
+The subsequent processing workflow:
+
+- selects annual USD facts and resolves duplicate SEC observations using fiscal-period metadata and period-end dates;
+- converts reported dollar values to USD billions;
+- calculates margins, annual growth, and five-year CAGR in Python rather than asking a language model to calculate them;
+- validates required columns, missing values, data types, and acceptable value ranges;
+- stores the curated financial summary in Parquet and DuckDB;
+- normalizes and chunks MD&A and Risk Factors text for retrieval, topic modeling, and citations; and
+- preserves the filing URL and metadata used to trace answers back to the SEC source.
+
+Raw SEC responses and filing HTML are retained locally for reproducibility but excluded from Git because they are generated source files. Curated Parquet, JSON chunks, and DuckDB assets are included for application deployment.
 
 ## Design Decisions
 
