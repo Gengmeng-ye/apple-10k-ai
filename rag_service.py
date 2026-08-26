@@ -792,7 +792,20 @@ If the evidence is insufficient, clearly say so.
 Do not invent citations, URLs, numbers, or dates.
 Return plain text only.
 Do not use Markdown tables, Markdown headings, or bold markers.
-Start with a direct answer, then briefly explain the significance of the disclosed risks.
+Use exactly this compact structure:
+
+Summary:
+Write one direct sentence answering the question.
+
+Key risks:
+- Write three or four bullets. Start each bullet with a short descriptive label
+  followed by a colon. Keep each bullet to no more than two short sentences.
+
+Why it matters:
+Write one concise synthesis sentence without repeating the bullets.
+
+Place each citation immediately after the claim it supports and before the
+sentence's final punctuation. Do not repeat the same evidence in multiple sections.
 Keep the response compact for a dashboard chat interface.
 Ensure normal spacing between all words.
 """
@@ -882,7 +895,8 @@ percentage reported in MD&A.
 What drove it:
 Summarize management's explanation using only the supplied MD&A evidence.
 
-Keep each section concise.
+Keep each section to no more than two short sentences. Place citations immediately
+after the claims they support and before sentence-ending punctuation.
 """
 
     instructions = """

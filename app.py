@@ -307,13 +307,31 @@ def format_answer_html(answer_text: str, message_index: int) -> str:
 
         def replace_citation(match: re.Match) -> str:
             label = match.group(1)
+            punctuation = match.group(2) or ""
             target = citation_target(label)
             return (
+                '<span class="answer-citation-cluster">'
                 f'<a class="answer-inline-citation" href="#{target}" '
                 f'aria-label="Reference {label}"><sup>[{label}]</sup></a>'
+                f'{escape(punctuation)}</span>'
             )
 
-        return re.sub(r"\[((?:F|M)?\d+)\]", replace_citation, safe_text)
+        return re.sub(
+            r"\[((?:F|M)?\d+)\]([.,;:]?)",
+            replace_citation,
+            safe_text,
+        )
+
+    def format_bullet_text(text: str) -> str:
+        """Emphasize a short bullet label without styling the whole sentence."""
+        label_match = re.match(r"^([^:]{2,45}):\s+(.+)$", text)
+        if not label_match:
+            return format_inline_citations(text)
+        label, details = label_match.groups()
+        return (
+            f'<span class="answer-bullet-label">{escape(label)}:</span> '
+            f'{format_inline_citations(details)}'
+        )
 
     for raw_line in answer_text.splitlines():
         line = raw_line.strip()
@@ -361,7 +379,9 @@ def format_answer_html(answer_text: str, message_index: int) -> str:
         }:
             parts.append(f'<div class="answer-heading">{safe_line}</div>')
         elif line.startswith("- "):
-            parts.append(f'<div class="answer-bullet">{safe_line[2:]}</div>')
+            parts.append(
+                f'<div class="answer-bullet">{format_bullet_text(line[2:])}</div>'
+            )
         else:
             parts.append(f'<div class="answer-line">{safe_line}</div>')
     return "".join(parts)
@@ -693,6 +713,8 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
     .st-key-question_composer{width:100%!important;margin:.3rem 0 .1rem!important}.st-key-question_composer div[data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:minmax(0,1fr) 38px!important;gap:.38rem!important;align-items:center!important}.st-key-question_composer div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:unset!important}.st-key-question_composer div[data-testid="stTextInput"] div[data-baseweb="input"],.st-key-question_composer div[data-testid="stTextInput"] input{height:38px!important;min-height:38px!important;font-size:.72rem!important}.st-key-question_composer div[data-testid="stButton"] button{width:38px!important;height:38px!important;min-height:38px!important;margin:0!important;border-radius:11px!important}
     .st-key-conversation_panel .conversation-turn{padding:.8rem .45rem}.st-key-conversation_panel .chat-user-bubble{max-width:88%;padding:.52rem .68rem;font-size:.76rem;line-height:1.42}.chat-assistant-row{grid-template-columns:30px minmax(0,1fr);gap:.5rem}.chat-avatar{width:30px;height:30px;border-radius:10px}.chat-avatar svg{width:20px;height:20px}.chat-answer{font-size:.8rem;line-height:1.58}.chat-name{font-size:.7rem;margin-bottom:.32rem}.answer-heading{font-size:.78rem}.answer-line,.answer-bullet{line-height:1.5}.answer-year{font-size:.66rem}.answer-source,.answer-citation,.answer-source-link a{font-size:.64rem}
 }
+.st-key-conversation_panel .chat-answer{max-width:820px!important;font-size:.94rem!important;line-height:1.66!important;color:#3E454B}.st-key-conversation_panel .answer-line,.st-key-conversation_panel .answer-bullet{max-width:78ch}.answer-heading{margin:1rem 0 .36rem;font-size:.86rem;font-weight:700}.answer-bullet{margin:.42rem 0;line-height:1.58}.answer-bullet-label{color:#2F363B;font-weight:650}.answer-citation-cluster{display:inline-flex;align-items:baseline;white-space:nowrap}.answer-source,.answer-citation{color:#687178;font-size:.78rem;line-height:1.55}.answer-source-link a{color:#5F6891;font-size:.78rem}.st-key-conversation_panel{max-height:620px!important}
+@media(max-width:768px){.st-key-conversation_panel{max-height:none!important}.st-key-conversation_panel .chat-answer{font-size:.8rem!important;line-height:1.58!important}.st-key-conversation_panel .answer-line,.st-key-conversation_panel .answer-bullet{max-width:none}.answer-source,.answer-citation,.answer-source-link a{font-size:.66rem}}
 </style>
 """)
 

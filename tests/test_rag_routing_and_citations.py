@@ -3,6 +3,7 @@
 from rag_service import (
     build_deterministic_financial_answer,
     classify_question,
+    clean_generated_answer,
     find_financial_metrics,
     should_retrieve_mda,
 )
@@ -149,3 +150,24 @@ Total Liabilities growth: -1.70%
 
     assert "Varied across the reported intervals" in answer
     assert "decreased by $4.93B (1.70%) overall" in answer
+
+
+def test_generated_answer_cleaner_preserves_compact_sections_and_bullets():
+    raw = (
+        "**Summary:**\nApple discloses supply-chain exposure [1].\n\n"
+        "**Key risks:**\n- **Supplier dependence:** Limited suppliers may disrupt output [2].\n\n"
+        "**Why it matters:**\nInterruptions can raise costs [3]."
+    )
+
+    cleaned = clean_generated_answer(raw)
+
+    assert "Summary:" in cleaned
+    assert "- Supplier dependence:" in cleaned
+    assert "Why it matters:" in cleaned
+    assert "**" not in cleaned
+
+
+def test_generated_answer_cleaner_adds_missing_space_before_citation():
+    cleaned = clean_generated_answer("A disclosed risk[1].")
+
+    assert cleaned == "A disclosed risk [1]."
