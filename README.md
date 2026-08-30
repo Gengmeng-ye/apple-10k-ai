@@ -217,7 +217,7 @@ Run the automated test suite:
 python -m pytest -q
 ```
 
-The current suite contains 19 passing tests covering:
+The current suite contains 21 passing tests covering:
 
 - Financial-data validation
 - Risk-topic processing
