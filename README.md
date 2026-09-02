@@ -36,14 +36,22 @@ The application currently covers Apple fiscal years 2021–2025 and is designed 
 - Extraction of Item 1A, Risk Factors, from Apple’s Form 10-K
 - Sentence-based chunking of filing text
 - TF-IDF feature engineering and NMF topic modeling
+- Anchor-based matching between unordered NMF components and readable theme labels
 - Six interpretable risk themes:
   - Legal and Regulatory
   - Products and Competition
   - Trade and Supply Chain
-  - Credit and Financial Risk
+  - Credit, Investment and Tax Risk
   - Cybersecurity and Data Privacy
   - Foreign Exchange
+- Low-confidence passages are surfaced separately as `Other / Mixed Risks`
+  instead of being presented as confidently classified.
+- Topic-focused excerpts built from the most relevant complete sentences
 - Interactive theme coverage chart and filing excerpts
+
+The six themes are model-derived analytical groupings rather than the formal
+subheadings used by Apple. A passage is placed in `Other / Mixed Risks` when its
+strongest topic contributes less than 50% of its total NMF topic weight.
 
 ## Supported Financial Metrics
 
@@ -116,7 +124,8 @@ Parquet + DuckDB + processed filing chunks ──> Streamlit dashboard
 2. Load the curated dataset into DuckDB.
 3. Validate required columns, data types, missing values, and value ranges.
 4. Extract Risk Factors from Apple’s latest Form 10-K.
-5. Build and label the NMF risk-topic model.
+5. Build the NMF risk-topic model, match components to readable labels, flag
+   low-confidence passages, and prepare topic-focused display excerpts.
 
 MD&A extraction and chunk preparation are handled by `src/extract_mda.py` and `src/prepare_mda_chunks.py`.
 
@@ -140,11 +149,13 @@ apple-10k-ai/
 ├── rag_service.py
 ├── financial_analysis.py
 ├── run_pipeline.py
+├── .env.example
 ├── requirements.txt
+├── requirements-lock.txt
 ├── assets/
 │   └── apple_energy_hero.png
 ├── data/
-│   ├── filings/
+│   ├── filings/                 # Generated Form 10-K HTML and metadata
 │   ├── raw/
 │   └── processed/
 │       ├── apple_financial_summary.parquet
@@ -184,6 +195,9 @@ conda activate apple10k
 pip install -r requirements.txt
 ```
 
+For a fully reproducible environment using the versions tested for this
+project, install `requirements-lock.txt` instead.
+
 ### 3. Configure environment variables
 
 Create a `.env` file in the project root:
@@ -197,17 +211,27 @@ The SEC requests an identifiable user agent. The OpenAI API key is required for 
 
 ### 4. Launch the application
 
-The repository includes lightweight processed data and a DuckDB database for the deployed application:
+The repository includes lightweight processed data and a DuckDB database for
+the dashboard:
 
 ```bash
 streamlit run app.py
 ```
 
-To rebuild the financial and risk datasets from locally downloaded SEC source files:
+To download the latest SEC source files and rebuild every dataset, run the
+following commands from the project root:
 
 ```bash
+python src/extract_sec_data.py
 python run_pipeline.py
+python src/extract_mda.py
+python src/prepare_mda_chunks.py
 ```
+
+The first command requires network access and a valid `SEC_USER_AGENT`. It also
+creates the local filing metadata required for filing links and citations.
+`run_pipeline.py` expects the downloaded Company Facts JSON and Form 10-K HTML
+to exist locally; it does not download them itself.
 
 ## Testing
 
@@ -217,10 +241,12 @@ Run the automated test suite:
 python -m pytest -q
 ```
 
-The current suite contains 21 passing tests covering:
+The current suite contains 23 tests covering:
 
 - Financial-data validation
 - Risk-topic processing
+- Stable semantic matching of NMF components to risk labels
+- Topic-focused excerpts and filing-abbreviation handling
 - Question classification and routing
 - Financial metric aliases
 - MD&A retrieval decisions
@@ -285,6 +311,10 @@ Raw SEC responses and filing HTML are retained locally for reproducibility but e
 - The application currently supports Apple only.
 - Annual financial analysis covers FY2021–FY2025; it does not yet include quarterly 10-Q data.
 - Risk-theme coverage represents the number of filing excerpts, not risk severity.
+- The six NMF themes are analytical groupings, not Apple's official risk
+  taxonomy; passages spanning multiple themes are shown as `Other / Mixed Risks`.
+- Topic assignments are unsupervised and should be interpreted as exploratory
+  text analysis rather than definitive legal or investment classification.
 - Retrieved filing evidence may not explain every financial change; the assistant does not speculate when support is insufficient.
 - The project does not forecast Apple’s stock price or future financial results.
 - The application is intended for analysis and education, not investment decision-making.

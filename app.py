@@ -17,6 +17,8 @@ from rag_service import get_answer
 
 HERO_IMAGE = Path("assets/apple_energy_hero.png")
 RISK_FILE = Path("data/processed/apple_risk_chunks.json")
+# Source of the bundled FY2025 risk excerpts (available without local metadata).
+RISK_SOURCE_URL = "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm"
 
 st.set_page_config(page_title="Apple 10-K Financial Analyst", page_icon="🍎", layout="wide")
 
@@ -272,14 +274,14 @@ def risk_chart(summary: pd.DataFrame, mobile: bool = False) -> go.Figure:
     maximum = int(chart_data["chunk_count"].max())
     figure = go.Figure(go.Bar(
         x=chart_data["chunk_count"], y=chart_data["topic_label"], orientation="h",
-        marker_color="#91BCE8", text=[f"{count} excerpts" for count in chart_data["chunk_count"]],
+        marker_color=["#B7BDC6" if label == "Other / Mixed Risks" else "#91BCE8" for label in chart_data["topic_label"]], text=[f"{count} excerpts" for count in chart_data["chunk_count"]],
         textposition="outside", cliponaxis=False,
         hovertemplate="<b>%{y}</b><br>%{x} filing excerpts<extra></extra>",
     ))
     figure.update_layout(
         height=235 if mobile else 330,
         margin={"l": 4, "r": 46, "t": 14, "b": 14} if mobile else {"l": 28, "r": 82, "t": 4, "b": 38},
-        bargap=.34 if mobile else .42, showlegend=False,
+        bargap=.42 if mobile else .53, showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis={"visible": False, "range": [0, maximum * 1.22]},
         yaxis={
@@ -492,9 +494,13 @@ def render_chat_page() -> None:
 data = calculate_financial_metrics(load_financial_data()).reset_index(drop=True)
 with RISK_FILE.open("r", encoding="utf-8") as file:
     risk_chunks = pd.DataFrame(json.load(file))
+risk_chunks["display_topic_label"] = risk_chunks.get(
+    "display_topic_label", risk_chunks["topic_label"]
+)
 risk_summary = (
-    risk_chunks.groupby(["topic_id", "topic_label"], as_index=False)
+    risk_chunks.groupby("display_topic_label", as_index=False)
     .agg(chunk_count=("chunk_id", "count"), average_score=("topic_score", "mean"))
+    .rename(columns={"display_topic_label": "topic_label"})
     .sort_values("chunk_count", ascending=False).reset_index(drop=True)
 )
 latest, previous, first = data.iloc[-1], data.iloc[-2], data.iloc[0]
@@ -523,6 +529,7 @@ div[data-testid="stPlotlyChart"]{padding:.75rem;background:#FFF;border:1px solid
 .balance-chart-title{margin:.15rem 0 .65rem;text-align:center;color:var(--ink);font-size:.9rem;font-weight:680}.balance-note{margin:.25rem auto 0;text-align:center;color:var(--soft);font-size:.74rem;line-height:1.5}
 .table-shell{width:100%;overflow:hidden;border:1px solid var(--line);border-radius:10px}.financial-table{width:100%;border:0;border-collapse:separate;border-spacing:0;font-size:.81rem}.financial-table th,.financial-table td{padding:.9rem .55rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center!important}.financial-table tbody tr:last-child td{border-bottom:0}.financial-table th:last-child,.financial-table td:last-child{border-right:0}.financial-table th{background:#F6F6F8;color:#555C61}.risk-label{color:var(--dark);font-size:.75rem;font-weight:700;letter-spacing:.07rem;text-transform:uppercase;margin:.15rem 0 .65rem}.risk-summary{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;background:#F0F2F6;border-radius:12px;font-size:.82rem}.risk-detail{box-sizing:border-box;height:330px;overflow:hidden;display:flex;flex-direction:column;padding:1.2rem 1.25rem;background:#F8FAFD;border:1px solid #D8E4F0;border-radius:10px}.risk-detail-title{font-size:1rem;font-weight:700;margin-bottom:.65rem}.risk-detail-text{flex:1;overflow-y:auto;color:#555D63;font-size:.84rem;line-height:1.62}.risk-source{color:#7A8288;font-size:.72rem;margin-top:.75rem;padding-top:.75rem;border-top:1px solid #D8E4F0}.risk-note{color:#7A8288;font-size:.74rem;margin-top:.65rem}.footer{margin-top:3.5rem;padding-top:1.25rem;border-top:1px solid var(--line);color:#747A7E;font-size:.76rem;line-height:1.7;text-align:center}
 /* Keep the same small gap below both desktop risk controls. */
+.risk-source a{color:inherit;text-decoration:none}.risk-source a:hover{text-decoration:underline}.risk-source a:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
 @media(min-width:601px){
     .st-key-risk_desktop{margin-top:.35rem!important}
     .risk-detail{position:relative;top:-.65rem;margin-bottom:-.65rem}
@@ -690,6 +697,9 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
     .st-key-risk_mobile div[data-testid="stPlotlyChart"]{touch-action:pan-y!important}
     div[data-testid="stPlotlyChart"]{padding:.3rem}
     div[data-testid="stHorizontalBlock"]:has(.balance-chart-title){row-gap:.45rem!important}
+    /* Desktop columns stack on phones; their large desktop gutter should not
+       become a large vertical gap between the chart and theme selector. */
+    div[data-testid="stHorizontalBlock"]:has(.risk-summary){row-gap:.65rem!important}
     .balance-chart-title{position:relative;z-index:3;display:block;line-height:1.4;margin:.2rem 0 .42rem;font-size:.76rem}.st-key-balance_mobile div[data-testid="stMarkdownContainer"]:has(.mobile-cash-title){display:block!important;margin:1.15rem 0 .7rem!important;padding:0!important}.mobile-cash-title{margin:0!important}.balance-note{padding:0 .3rem;font-size:.62rem}
 
     .takeaway-wrap{margin-top:.65rem;padding:.78rem}.takeaway-header{display:block;padding-bottom:.6rem}.takeaway-title{font-size:.88rem}.takeaway-summary{margin-top:.25rem;font-size:.72rem;line-height:1.4}
@@ -873,7 +883,9 @@ render_html(f"""
 left, right = st.columns(2, gap="large")
 with left:
     render_html('<div class="risk-label">Theme coverage</div>')
-    render_html(f'<div class="risk-summary"><span><strong>{len(risk_chunks)}</strong> filing excerpts</span><span><strong>{len(risk_summary)}</strong> themes</span></div>')
+    theme_count = int((risk_summary["topic_label"] != "Other / Mixed Risks").sum())
+    review_suffix = " + review group" if "Other / Mixed Risks" in risk_summary["topic_label"].values else ""
+    render_html(f'<div class="risk-summary"><span><strong>{len(risk_chunks)}</strong> filing excerpts</span><span><strong>{theme_count}</strong> themes{review_suffix}</span></div>')
     with st.container(key="risk_desktop"):
         st.plotly_chart(
             risk_chart(risk_summary),
@@ -888,13 +900,17 @@ with left:
             config={"displayModeBar": False, "staticPlot": True, "responsive": True},
             key="risk_coverage_chart_mobile",
         )
-    render_html('<div class="risk-note">Bars show filing excerpt coverage, not risk severity.</div>')
+    render_html('<div class="risk-note">Bars show filing excerpt coverage, not risk severity. Low-confidence or multi-theme excerpts are grouped under Other / Mixed Risks.</div>')
 with right:
     render_html('<div class="risk-label">Explore a theme</div>')
     selected_topic = st.selectbox("Risk theme", risk_summary["topic_label"].tolist(), label_visibility="collapsed", key="risk_topic")
-    topic_rows = risk_chunks[risk_chunks["topic_label"] == selected_topic].sort_values("topic_score", ascending=False)
-    excerpt = str(topic_rows.iloc[0]["text"]).strip()
-    render_html(f'<div class="risk-detail"><div class="risk-detail-title">{escape(selected_topic)}</div><div class="risk-detail-text">{escape(excerpt)}</div><div class="risk-source">Source: Apple FY{latest_year} Form 10-K · Item 1A</div></div>')
+    topic_rows = risk_chunks[risk_chunks["display_topic_label"] == selected_topic].sort_values("topic_score", ascending=False)
+    excerpt = str(topic_rows.iloc[0].get("excerpt", topic_rows.iloc[0]["text"])).strip()
+    if selected_topic == "Other / Mixed Risks":
+        excerpt = str(topic_rows.iloc[0]["text"]).strip()
+    render_html(f'<div class="risk-detail"><div class="risk-detail-title">{escape(selected_topic)}</div><div class="risk-detail-text">{escape(excerpt)}</div><div class="risk-source"><a href="{escape(RISK_SOURCE_URL, quote=True)}" target="_blank" rel="noopener noreferrer" aria-label="Open Apple FY2025 Form 10-K on the SEC website">Source: Apple FY2025 Form 10-K · Item 1A ↗</a></div></div>')
+    if selected_topic == "Other / Mixed Risks":
+        st.caption("Needs review: no dominant model topic. This is a review group, not a separate risk theme.")
 
 
 render_html("""
