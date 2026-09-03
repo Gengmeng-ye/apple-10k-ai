@@ -673,7 +673,7 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
 @media(max-width:600px){
     .block-container{padding:2.55rem .8rem 1.75rem!important}
     .topbar{min-height:36px;padding:.1rem 0 .5rem}.brand{gap:.45rem;font-size:.66rem}.brand-mark{width:27px;height:27px;flex-basis:27px;font-size:.6rem}
-    div[data-testid="stImage"]{margin-top:.55rem}div[data-testid="stImage"] img{height:175px;border-radius:8px}
+    div[data-testid="stImage"]{margin-top:.55rem}div[data-testid="stImage"] img{height:150px;border-radius:8px}
     .st-key-active_page{width:100%!important;max-width:310px!important;margin:.55rem auto .05rem!important}.st-key-active_page div[data-testid="stSegmentedControl"]{width:100%!important;max-width:310px!important;margin:0 auto!important}div[data-testid="stSegmentedControl"] button{min-height:32px;padding:.18rem .28rem!important;font-size:.64rem}
     .hero-copy{margin:.72rem auto 0}.hero-title{font-size:1.72rem;line-height:1.08;letter-spacing:-.045rem;white-space:normal}
     .section-heading{margin:.78rem auto .5rem}.section-kicker{font-size:1.22rem}.section-title{font-size:1.2rem;letter-spacing:-.018rem;margin-top:.14rem}
@@ -758,6 +758,22 @@ with nav_center:
     )
 
 if active_page == "Ask Apple’s Filings":
+    # Enlarge only the mobile Ask page's empty conversation area.
+    render_html("""
+    <style>
+    @media(max-width:600px){
+        .st-key-conversation_empty,
+        .st-key-conversation_empty>div,
+        .st-key-conversation_empty div[data-testid="stVerticalBlock"]{
+            height:160px!important;min-height:160px!important;max-height:160px!important;
+        }
+        .st-key-conversation_empty .chat-ready{height:160px!important}
+        .st-key-chat_workspace>[data-testid="stLayoutWrapper"]:has(>.st-key-conversation_empty){
+            flex:0 0 auto!important;height:auto!important;
+        }
+    }
+    </style>
+    """)
     render_chat_page()
     render_html('<div class="chat-source-note">Answers are based on SEC Company Facts data and Apple’s latest Form 10-K disclosures.</div>')
     st.stop()
