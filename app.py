@@ -448,21 +448,23 @@ def render_chat_page() -> None:
 
         with st.container(key="chat_controls"):
             with st.container(key="prompt_suggestions"):
-                prompt_left, example_one, example_two, example_three, prompt_right = st.columns([.35, 1, 1, 1, .35], gap="small")
                 examples = [
-                    (example_one, "Revenue: 2024 vs 2025", "Compare Apple's revenue in 2024 and 2025."),
-                    (example_two, "Assets, liabilities & cash", "Compare Apple's assets, liabilities, and cash in 2023, 2024, and 2025."),
-                    (example_three, "Supply-chain risks", "What supply chain risks does Apple disclose?"),
+                    ("Revenue: 2024 vs 2025", "Revenue comparison", "Compare Apple's revenue in 2024 and 2025."),
+                    ("Assets, liabilities & cash", "Balance sheet", "Compare Apple's assets, liabilities, and cash in 2023, 2024, and 2025."),
+                    ("Supply-chain risks", "Supply-chain risks", "What supply chain risks does Apple disclose?"),
                 ]
-                for column, label, example_question in examples:
-                    with column:
-                        st.button(
-                            label,
-                            use_container_width=True,
-                            on_click=fill_example_question,
-                            args=(example_question,),
-                            key=f"example_{example_question}",
-                        )
+                for layout in ("desktop", "mobile"):
+                    with st.container(key=f"prompt_labels_{layout}"):
+                        columns = st.columns([.35, 1, 1, 1, .35], gap="small")
+                        for index, (desktop_label, mobile_label, question) in enumerate(examples):
+                            with columns[index + 1]:
+                                st.button(
+                                    mobile_label if layout == "mobile" else desktop_label,
+                                    use_container_width=True,
+                                    on_click=fill_example_question,
+                                    args=(question,),
+                                    key=f"example_{layout}_{index}",
+                                )
 
             with st.container(key="question_composer"):
                 input_column, send_column = st.columns([8, .46], gap="small")
@@ -670,7 +672,13 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
 .st-key-risk_mobile,
 .mobile-data-table{display:none!important}
 @media(max-width:900px){div[data-testid="stImage"] img{height:220px}.hero-title{font-size:2.55rem;white-space:normal}.takeaway-grid{grid-template-columns:repeat(2,1fr)}.data-status{display:none}.table-shell{overflow-x:auto}.financial-table{min-width:920px}div[data-testid="stSegmentedControl"]{width:100%}}
+.st-key-prompt_labels_mobile{display:none!important}
+[data-testid="stLayoutWrapper"]:has(>.st-key-prompt_labels_mobile){display:none!important}
 @media(max-width:600px){
+    .st-key-prompt_labels_desktop{display:none!important}
+    .st-key-prompt_labels_mobile{display:block!important}
+    [data-testid="stLayoutWrapper"]:has(>.st-key-prompt_labels_desktop){display:none!important}
+    [data-testid="stLayoutWrapper"]:has(>.st-key-prompt_labels_mobile){display:block!important}
     .block-container{padding:2.55rem .8rem 1.75rem!important}
     .topbar{min-height:36px;padding:.1rem 0 .5rem}.brand{gap:.45rem;font-size:.66rem}.brand-mark{width:27px;height:27px;flex-basis:27px;font-size:.6rem}
     div[data-testid="stImage"]{margin-top:.55rem}div[data-testid="stImage"] img{height:175px;border-radius:8px}
@@ -724,13 +732,21 @@ div[data-testid="stFormSubmitButton"] button{width:44px!important;height:44px!im
     .st-key-conversation_panel{margin-bottom:0!important}
     .st-key-chat_workspace .st-key-prompt_suggestions{width:100%!important;margin:.45rem auto 0!important;transform:none;overflow:hidden!important}
     .st-key-chat_controls{width:100%!important;margin:.35rem 0 0!important}
+    .st-key-chat_workspace:has(.st-key-conversation_empty) [data-testid="stVerticalBlock"]:has(>.st-key-conversation_empty){gap:.6rem!important;justify-content:flex-start!important}
+    .st-key-conversation_empty,.st-key-conversation_empty>div,.st-key-conversation_empty div[data-testid="stVerticalBlock"]{height:80px!important;min-height:80px!important;max-height:80px!important}
+    .st-key-conversation_empty .chat-ready{height:80px!important}
+    .st-key-chat_workspace{gap:10px!important}
+    .st-key-chat_workspace>[data-testid="stLayoutWrapper"]:has(>.st-key-conversation_empty){flex:0 0 auto!important;height:auto!important;min-height:0!important;max-height:none!important;padding-bottom:0!important}
+    .st-key-chat_workspace>[data-testid="stLayoutWrapper"]:has(>.st-key-chat_controls){padding-top:0!important}
+    .st-key-chat_workspace .st-key-chat_controls[data-testid="stVerticalBlock"]{gap:10px!important;margin-top:0!important}
         .st-key-chat_controls>div[data-testid="stVerticalBlock"],
-        .st-key-chat_controls>div>div[data-testid="stVerticalBlock"]{gap:.5rem!important}
+        .st-key-chat_controls>div>div[data-testid="stVerticalBlock"]{gap:10px!important}
     .st-key-chat_controls .st-key-prompt_suggestions,.st-key-chat_controls .st-key-question_composer{margin:0!important}
     .st-key-prompt_suggestions div[data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:.42rem!important;width:100%!important;min-width:0!important}
     .st-key-prompt_suggestions div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:unset!important}.st-key-prompt_suggestions div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]:not(:has(button)){display:none!important}
-    .st-key-prompt_suggestions div[data-testid="stButton"] button{width:100%!important;min-height:27px!important;height:27px!important;padding:.18rem .25rem!important;white-space:nowrap!important;font-size:.53rem!important}
-    .st-key-prompt_suggestions div[data-testid="stButton"] button p{font-size:.56rem!important;line-height:1!important;white-space:nowrap!important}
+    .st-key-prompt_suggestions div[data-testid="stButton"] button{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-height:36px!important;height:36px!important;padding:4px!important;white-space:normal!important}
+    .st-key-prompt_suggestions div[data-testid="stButton"] button [data-testid="stMarkdownContainer"]{display:flex!important;align-items:center!important;justify-content:center!important;height:auto!important;min-height:0!important;margin:0!important;padding:0!important}
+    .st-key-prompt_suggestions div[data-testid="stButton"] button p{margin:0!important;padding:0!important;font-size:.62rem!important;line-height:1.2!important;white-space:normal!important;text-align:center!important}
     .st-key-question_composer{width:100%!important;margin:.3rem 0 .1rem!important}.st-key-question_composer div[data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:minmax(0,1fr) 38px!important;gap:.38rem!important;align-items:center!important}.st-key-question_composer div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]{width:auto!important;min-width:0!important;flex:unset!important}.st-key-question_composer div[data-testid="stTextInput"] div[data-baseweb="input"],.st-key-question_composer div[data-testid="stTextInput"] input{height:38px!important;min-height:38px!important;font-size:.72rem!important}.st-key-question_composer div[data-testid="stButton"] button{width:38px!important;height:38px!important;min-height:38px!important;margin:0!important;border-radius:11px!important}
     .st-key-conversation_panel .conversation-turn{padding:.8rem .45rem}.st-key-conversation_panel .chat-user-bubble{max-width:88%;padding:.52rem .68rem;font-size:.76rem;line-height:1.42}.chat-assistant-row{grid-template-columns:30px minmax(0,1fr);gap:.5rem}.chat-avatar{width:30px;height:30px;border-radius:10px}.chat-avatar svg{width:20px;height:20px}.chat-answer{font-size:.8rem;line-height:1.58}.chat-name{font-size:.7rem;margin-bottom:.32rem}.answer-heading{font-size:.78rem}.answer-line,.answer-bullet{line-height:1.5}.answer-year{font-size:.66rem}.answer-source,.answer-citation,.answer-source-link a{font-size:.64rem}
 }
